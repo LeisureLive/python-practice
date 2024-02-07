@@ -10,7 +10,7 @@ from copy import deepcopy
 
 sys.path.append('../../..')
 from idm.cases.test_case import TestCase
-from idm.common_tools import import_api, split_list, collect_sdi_qps, exec_importer
+from idm.tools.common_tools import import_api, split_list, collect_sdi_qps, exec_importer
 
 false = False
 true = True

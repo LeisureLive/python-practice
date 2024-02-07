@@ -164,7 +164,7 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
         }
 
     def do_test(self, servers, count, list_count, proportion=0):
-        cnt = int(1200000 / list_count)
+        cnt = int(2000000 / list_count)
         print("开始导入 profile_set(登录新用户 125 个属性 version=2.0) 数据, 数据量={}".format(1200000))
         if os.path.exists(self.file_name):
             print("文件 {} 存在，删除历史记录的用户信息".format(self.file_name))
@@ -200,7 +200,7 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
             profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
                 random.randint(1000000, 9999999))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
-            profile_set_json['first_visit_source'] = first_visit_source_list[
+            profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]
             profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
             profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),

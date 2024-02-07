@@ -1,9 +1,10 @@
 import argparse
 import json
 import re
-import requests
 import sys
 import time
+
+import requests
 
 from idm.cases.cmpt_mode_cases.idm_profile_set_v2_distinct_new_more_props_anonymous_user import \
     IdmProfileSetV2DistinctNewUserMorePropsCase
@@ -23,9 +24,10 @@ from idm.cases.id3_mode_cases.idm_profile_set_v3_distinct_old_more_props import 
 from idm.cases.id3_mode_cases.idm_track_profile_v3_mixed_user import IdmTrackProfileV3MixedUserCase
 from idm.cases.id3_mode_cases.idm_track_v3_distinct_new_user import IdmTrack3DistinctNewUserCase
 from idm.cases.id3_mode_cases.idm_track_v3_distinct_old_user import IdmTrack3DistinctOldUserCase
-from idm.common_tools import exec_command, check_is_cluster, restart_module, pause_module, start_module, \
+from idm.tools.common_tools import exec_command, check_is_cluster, restart_module, pause_module, start_module, \
     waiting_sdi_consume_latency, clear_log, get_ips_from_hosts, get_sdi_version, get_horizon_version, close_mock_idm, \
     open_idm_mock
+from idm.tools.email_tool import send_benchmark_result
 
 sys.path.append('..')
 
@@ -217,8 +219,13 @@ if __name__ == "__main__":
     parser.add_argument('-id2_mode_data_count', type=int, default=0, help='id2_mode_data_count')
     parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
     parser.add_argument('-mock_idm_data_count', type=int, default=0, help='mock_idm_data_count')
+    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_cmpt', help='id2_mode_project_name')
+    parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3', help='id3_mode_project_name')
+    parser.add_argument('-mock_idm_project_name', type=str, default='benchmark_mock_idm', help='mock_idm_project_name')
     parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
     parser.add_argument('-import_mode', type=str, help='导入模式：chain / hdfs_importer / importer / importer_v2')
+    parser.add_argument('-result_delivery_method', type=str, default="push", help='结果通知方式: push(微信机器人推送)/email(邮件通知)')
+    parser.add_argument('-receiver_emails', type=str, help='邮件通知接收人地址, 多个邮箱地址使用 ; 进行分隔')
     args = parser.parse_args()
 
     # 0、解析参数
@@ -240,11 +247,9 @@ if __name__ == "__main__":
     cmpt_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        project_name = "benchmark_cmpt"
+        project_name = args.id2_mode_project_name
         create_new_project(exec_ip, project_name, 'v3.0-cmpt', skip_init)
         identification = time.time()
-        # 尝试关闭 mock idm, 避免上次开启mock idm后异常退出
-        close_mock_idm(exec_ip)
         test_cases = [
             # IdmProfileSetV2DistinctNewUserLessPropsCase(args.build_user_id, identification),
             IdmProfileSetV2DistinctNewUserMorePropsCase(args.build_user_id, identification),
@@ -278,7 +283,7 @@ if __name__ == "__main__":
     # 5、对 id3_mode_cases 项目进行测试
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
-        project_name = "benchmark_id3"
+        project_name = args.id3_mode_project_name
         create_new_project(exec_ip, project_name, 'v3.0', skip_init)
         identification = time.time()
         test_cases = [
@@ -310,9 +315,11 @@ if __name__ == "__main__":
                 id3_project_qps_list.append(test_case.collect_qps(exec_ip, id3_mode_data_count))
 
     # 6、对 mock idm case 进行测试
+    mock_idm_case_qps_list = []
     if mock_idm_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        create_new_project(exec_ip, "benchmark_cmpt_one", 'v3.0_cmpt_one', skip_init)
+        project_name = args.mock_idm_project_name
+        create_new_project(exec_ip, project_name, 'v3.0_cmpt_one', skip_init)
         identification = time.time()
         # 开启 mock idm
         open_idm_mock(exec_ip)
@@ -323,7 +330,7 @@ if __name__ == "__main__":
 
         servers = []
         for ip in ip_list:
-            server = "http://{}:8106/sa?project={}".format(ip, "benchmark_cmpt_one")
+            server = "http://{}:8106/sa?project={}".format(ip, project_name)
             servers.append(server)
 
         for test_case in test_cases:
@@ -335,8 +342,12 @@ if __name__ == "__main__":
             clear_log(exec_ip)
             test_case.do_test(servers, id2_mode_data_count, list_count)
             start_module(exec_ip, "integrator", "scheduler")
-            cmpt_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
+            mock_idm_case_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
         close_mock_idm(exec_ip)
 
-    # 6、推送结果
-    push_result(ip_list, args.build_user_id, args.build_url, args.webhook, import_mode)
+    # 7、推送结果
+    if args.result_delivery_method == 'email':
+        send_benchmark_result(ip_list, cmpt_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+                              'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', args.receiver_emails)
+    else:
+        push_result(ip_list, args.build_user_id, args.build_url, args.webhook, import_mode)

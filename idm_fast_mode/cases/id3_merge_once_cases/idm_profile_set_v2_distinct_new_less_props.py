@@ -86,10 +86,10 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
             device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + \
                         str(random.randint(1000000, 9999999)) + str(concurrent_index)
             profile_set_json['distinct_id'] = device_id
-            profile_set_json['gender'] = genders[random.randint(0, len(genders) - 1)]
-            profile_set_json['first_visit_source'] = first_visit_source_list[
+            profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
+            profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]
-            profile_set_json['city'] = citys[random.randint(0, len(citys) - 1)]
+            profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
             profile_set_list.append(profile_set_json)
         # with open(self.file_name, 'a') as f:
         #     for item in profile_set_list:

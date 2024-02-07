@@ -210,7 +210,7 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
             profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
                 random.randint(1000000, 9999999))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
-            profile_set_json['first_visit_source'] = first_visit_source_list[
+            profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]
             profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
             profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),
