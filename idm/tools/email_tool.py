@@ -28,21 +28,37 @@ def send_email(sender_addr, password, receiver_addr, title, content):
         print('error:', e)  # 打印错误
 
 
-def send_benchmark_result(ip_list, cmpt_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+def send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
                           sender_addr, password, receiver_addrs):
     if receiver_addrs is None:
         receiver_addrs = 'hejie@sensorsdata.cn'
 
+    cluster_size = len(ip_list)
+    if idm_engine_type == 'default':
+        id2_mode = '[兼容模式]'
+        id3_mode = '[ID3 模式]'
+    else:
+        id2_mode = '[高性能尽可能关联 2 id]'
+        id3_mode = '[高性能 ID3]'
     # 测试结果
     nodes = []
-    for case_qps in cmpt_project_qps_list:
-        nodes.append(["[兼容模式] " + case_qps['title'], case_qps['min_qps'], case_qps['max_qps'], case_qps['avg_qps']])
+    for case_qps in id2_project_qps_list:
+        avg_qps = int(case_qps['avg_qps']) * cluster_size
+        max_qps = int(case_qps['max_qps']) * cluster_size
+        min_qps = int(case_qps['min_qps']) * cluster_size
+        nodes.append([id2_mode + case_qps['title'], avg_qps, min_qps, max_qps])
     for case_qps in id3_project_qps_list:
-        nodes.append(["[ID3模式] " + case_qps['title'], case_qps['min_qps'], case_qps['max_qps'], case_qps['avg_qps']])
+        avg_qps = int(case_qps['avg_qps']) * cluster_size
+        max_qps = int(case_qps['max_qps']) * cluster_size
+        min_qps = int(case_qps['min_qps']) * cluster_size
+        nodes.append([id3_mode + case_qps['title'], avg_qps, min_qps, max_qps])
     for case_qps in mock_idm_case_qps_list:
-        nodes.append(["[Mock IDM] " + case_qps['title'], case_qps['min_qps'], case_qps['max_qps'], case_qps['avg_qps']])
+        avg_qps = int(case_qps['avg_qps']) * cluster_size
+        max_qps = int(case_qps['max_qps']) * cluster_size
+        min_qps = int(case_qps['min_qps']) * cluster_size
+        nodes.append(["[Mock IDM] " + case_qps['title'], avg_qps, min_qps, max_qps])
 
-    columns = ['数据集', 'min_qps', 'max_qps', 'avg_qps']
+    columns = ['数据集', 'avg_qps', 'min_qps', 'max_qps']
     data = pd.DataFrame(nodes, columns=columns)
     data_html = data.to_html(escape=False)
 
@@ -126,7 +142,10 @@ def send_benchmark_result(ip_list, cmpt_project_qps_list, id3_project_qps_list, 
     html_msg = "<html>" + head + body + "</html>"
 
     msg = MIMEMultipart()
-    subject = '导入流性能测试结果 - ' + datetime.now().strftime("%Y-%m-%d")
+    if idm_engine_type == 'default':
+        subject = '导入流性能测试结果(兼容模式引擎 + ID3 引擎) - ' + datetime.now().strftime("%Y-%m-%d")
+    else:
+        subject = '导入流性能测试结果(高性能引擎) - ' + datetime.now().strftime("%Y-%m-%d")
     msg['Subject'] = subject
     msg['From'] = sender_addr
     msg['To'] = receiver_addrs
@@ -149,8 +168,8 @@ if __name__ == '__main__':
     # send_email('enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', 'hejie@sensorsdata.com', '测试邮件', '这是一封测试邮件!')
     ip_list = ['10.129.24.143', '10.129.25.195', '10.129.26.59']
     mode = 'chain'
-    cmpt_project_qps_list = [{'title': 'profile_set', 'min_qps': 100, 'max_qps': 200, 'avg_qps': 150}]
+    id2_project_qps_list = [{'title': 'profile_set', 'min_qps': 100, 'max_qps': 200, 'avg_qps': 150}]
     id3_project_qps_list = [{'title': 'profile_set (version=3.0)', 'min_qps': 100, 'max_qps': 200, 'avg_qps': 150}]
     mock_idm_case_qps_list = [{'title': 'profile_set', 'min_qps': 500, 'max_qps': 1000, 'avg_qps': 750}]
-    send_benchmark_result(ip_list, mode, cmpt_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+    send_benchmark_result(ip_list, mode, id2_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
                           'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', 'hejie@sensorsdata.com')

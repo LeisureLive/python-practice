@@ -8,21 +8,20 @@ from copy import deepcopy
 
 sys.path.append('../../..')
 from idm.cases.test_case import TestCase
-from idm.tools.common_tools import collect_sdi_qps, import_api, exec_importer
+from idm.tools.common_tools import collect_sdi_qps, import_api,exec_importer
 
 false = False
 true = True
 
 
-class IdmTrack3DistinctOldUserCase(TestCase):
+class IdmTrackV2DistinctOldUserCase(TestCase):
 
     def __init__(self, build_user, identification):
         super().__init__()
-        self.import_file_name = "IdmTrack3DistinctOldUserCase_{}_{}_importer.json".format(build_user, identification)
+        self.import_file_name = "IdmTrackV2DistinctOldUserCase_{}_{}_importer.json".format(build_user, identification)
         self.cost = 0
-        self.file_name = "profile_set_v3_more_{}_{}.json".format(build_user, identification)
-        self.track_v3 = {"event": "$AppStart", "time": int(time.time() * 1000),
-                         "identities": {"$identity_idfv": ""},
+        self.file_name = "profile_set_v2_more_anonymous_{}_{}.json".format(build_user, identification)
+        self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
                          "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
@@ -30,21 +29,15 @@ class IdmTrack3DistinctOldUserCase(TestCase):
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
                                         "$app_version": "1.9.0", "$manufacturer": "Apple", "$lib": "iOS", "$wifi": true,
-                                        "$network_type": "WIFI", "$timezone_offset": -480, "$lib_version": "2.6.4-id",
-                                        "string_field": "1234567890",
-                                        "bool_field": true,
-                                        "number_field": 1234567890,
-                                        "list_field": ["12345678901", "12345678902", "12345678903"],
-                                        "datetime_field": "2020-02-02 22:22:22"},
+                                        "$network_type": "WIFI", "$timezone_offset": -480, "$lib_version": "2.6.4-id"},
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 4
-        print("开始导入老用户 track(version=3.0) 数据, 数据量={}".format(count))
+        count = count * 3
+        print("开始导入 track(匿名老用户, version=2.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
-
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
             concurrent_num = int(count / 1000000)
@@ -52,54 +45,43 @@ class IdmTrack3DistinctOldUserCase(TestCase):
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
-        with ThreadPoolExecutor(max_workers=min(concurrent_num, 10)) as executor:
+        with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
             for i in range(concurrent_num):
-                future = executor.submit(self.run_make_records, servers, avg_count, list_count, already_identities, i)
+                future = executor.submit(self.run_make_records, servers, already_identities, avg_count, list_count, i)
                 futures.append(future)
         total_count = 0
         for future in futures:
             total_count += future.result()
+        print("导入 track(匿名老用户, version=2.0) 数据完成, 数据量={}".format(total_count))
         del already_identities
         gc.collect()
-        print("导入老用户 track(version=3.0) 数据完成")
 
-    def run_make_records(self, servers, count, list_count, already_identities, concurrent_index):
-        print("导入 老用户 track(version=3.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
+    def run_make_records(self, servers, already_identities, count, list_count, concurrent_index):
+        print("导入 track(匿名老用户, version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / list_count)
         for i in range(cnt):
-            test_data = self.make_track_v3_old_user(list_count, already_identities)
+            test_data = self.make_track_v2_old_user(list_count, already_identities)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+        print("导入 track(匿名老用户, version=2.0) 数据完成")
         return count
 
-    def make_track_v3_old_user(self, count, already_identities):
-        track_v3_list = []
+    def make_track_v2_old_user(self, count, already_identities):
+        track_v2_list = []
         for num in range(count):
-            track_json = deepcopy(self.track_v3)
+            track_json = deepcopy(self.track_v2)
             index = random.randint(0, len(already_identities) - 1)
             distinct_id = already_identities[index]['distinct_id']
-            login_id = already_identities[index]['identities']['$identity_login_id']
-            idfv = already_identities[index]['identities']['$identity_idfv']
-            mobile = already_identities[index]['identities']['$identity_mobile']
-            cookie = already_identities[index]['identities']['$identity_cookie_id']
-            email = already_identities[index]['identities']['$identity_email']
-            taobao = already_identities[index]['identities']['$identity_taobao_ouid']
             track_json.update({"distinct_id": distinct_id})
             track_json.update({"time": int(time.time() * 1000) + num})
             track_json["properties"].update({"$device_id": distinct_id})
-            track_json["identities"].update({"$identity_login_id": login_id})
-            track_json["identities"].update({"$identity_idfv": idfv})
-            track_json["identities"].update({"$identity_mobile": mobile})
-            track_json["identities"].update({"$identity_cookie_id": cookie})
-            track_json["identities"].update({"$identity_email": email})
-            track_json["identities"].update({"$identity_taobao_ouid": taobao})
+            track_json["properties"].update({"num": str(num)})
             _flush_time = str(random.randint(1000000, 9999999)) + str(num)
             track_json["properties"].update({"case_id": _flush_time})
-            track_json["properties"].update(
-                {"case_text": "一二三四五" + str(time.time() * 1000)})
-            track_json["properties"].update(
-                {"string_field": "一二三四五六七八九十" + str(time.time() * 1000)})
-            track_v3_list.append(track_json)
-        return track_v3_list
+            track_json["properties"].update({"case_text": "一二三四五" + str(num)})
+            track_json["properties"].update({"order": str(num)})
+            track_json.update({"_track_id": random.randint(1000000, 9999999999)})
+            track_v2_list.append(track_json)
+        return track_v2_list
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
@@ -114,7 +96,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
         self.clean_path(self.import_file_name)
         with open(self.import_file_name, "w") as f:
             for i in range(0, count):
-                ret = self.make_track_v3_old_user(1, already_identities)
+                ret = self.make_track_v2_old_user(1, already_identities)
                 f.write(json.dumps(ret[0]) + '\n')
 
         self.cost = exec_importer(exec_ip, project_name, self.import_file_name, import_mode)
@@ -122,6 +104,6 @@ class IdmTrack3DistinctOldUserCase(TestCase):
 
     def collect_import_qps(self, count):
         qps_detail = {}
-        qps_detail['title'] = "老用户 track 事件-importer"
+        qps_detail['title'] = "匿名老用户 track 事件-importer"
         qps_detail['avg_qps'] = count / self.cost
         return qps_detail

@@ -31,7 +31,7 @@ from idm_fast_mode.common_tools import exec_command, check_is_cluster, restart_m
 sys.path.append('..')
 
 
-global cmpt_project_qps_list
+global id2_project_qps_list
 global id3_project_qps_list
 
 
@@ -148,7 +148,7 @@ def push_result(ip_list, build_user_id, build_url, webhook):
         env_type = "集群"
     node_num = len(ip_list)
     cucumber_dict.update({"环境类型": env_type})
-    for case_qps in cmpt_project_qps_list:
+    for case_qps in id2_project_qps_list:
         key = "[兼容模式] " + str(case_qps['title'])
         if is_cluster:
             avg_qps = int(case_qps['avg_qps']) * node_num
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
     open_idm_optimize_trigger(exec_ip)
     # 3、对兼容模式项目进行测试
-    cmpt_project_qps_list = []
+    id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
         create_new_project(exec_ip, "benchmark_merge_once", 'merge_once')
@@ -247,7 +247,7 @@ if __name__ == "__main__":
             clear_log(exec_ip)
             test_case.do_test(servers, id2_mode_data_count, list_count)
             start_module(exec_ip, "integrator", "scheduler")
-            cmpt_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
+            id2_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
 
     # 5、对 id3_mode_cases 项目进行测试
     id3_project_qps_list = []

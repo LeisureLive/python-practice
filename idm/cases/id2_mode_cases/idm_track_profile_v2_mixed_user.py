@@ -1,6 +1,6 @@
 import datetime
+import gc
 import json
-import os
 import random
 import sys
 import time
@@ -10,18 +10,18 @@ from copy import deepcopy
 
 sys.path.append('../../..')
 from idm.cases.test_case import TestCase
-from idm.tools.common_tools import collect_sdi_qps, import_api, exec_importer
+from idm.tools.common_tools import import_api, split_list, collect_sdi_qps, exec_importer
 
 false = False
 true = True
 
 
-class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
+class IdmTrackProfileV2MixedUserCase(TestCase):
 
     def __init__(self, build_user, identification):
         super().__init__()
         self.file_name = "profile_set_v2_more_anonymous_{}_{}.json".format(build_user, identification)
-        self.import_file_name = "IdmProfileSetV2DistinctNewUserMorePropsCase_{}_{}_importer.json".format(build_user, identification)
+        self.import_file_name = "IdmTrackProfileV2MixedUserCase_{}_{}_importer.json".format(build_user, identification)
         self.cost = 0
         self.profile_set_v2_more = {
             "distinct_id": "",
@@ -157,89 +157,120 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
             },
             "type": "profile_set"
         }
-
-        self.profile_set_v2_identities = {
-            "distinct_id": ""
-        }
+        self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
+                         "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
+                                 "$lib_method": "code"},
+                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                                        "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
+                                        "$model": "x86_64", "$screen_width": 414,
+                                        "$app_id": "cn.sensorsdata.SensorsData",
+                                        "$app_version": "1.9.0", "$manufacturer": "Apple", "$lib": "iOS", "$wifi": true,
+                                        "$network_type": "WIFI", "$timezone_offset": -480, "$lib_version": "2.6.4-id"},
+                         "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        print("开始导入 profile_set(匿名新用户 125 个属性 version=2.0) 数据, 数据量={}".format(count))
-        if os.path.exists(self.file_name):
-            print("文件 {} 存在，删除历史记录的用户信息".format(self.file_name))
-            os.remove(self.file_name)
+        count = count * 3
+        print("开始导入匿名新老用户 profile + track 混合数据(version=2.0), 数据量={}".format(count))
+        with open(self.file_name, 'r') as f:
+            json_data = f.readlines()
+        already_identities = [json.loads(line.strip()) for line in json_data]
+        # 单个并发最多导 100w 数据
+        if count % 1000000 == 0:
+            concurrent_num = int(count / 1000000)
         else:
-            print("文件 {} 不存在, 记录用户信息到此文件".format(self.file_name))
-        # 单个并发最多导 200w 数据
-        if count % 2000000 == 0:
-            concurrent_num = int(count / 2000000)
-        else:
-            concurrent_num = int(count / 2000000) + 1
+            concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
         with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
             for i in range(concurrent_num):
-                future = executor.submit(self.run_make_records, servers, avg_count, list_count, i)
+                future = executor.submit(self.run_make_records, servers, already_identities, avg_count, list_count, i)
                 futures.append(future)
         total_count = 0
         for future in futures:
             total_count += future.result()
-        print("导入 profile_set(匿名新用户, 125 个属性 version=2.0) 数据完成, 数据量={}".format(total_count))
+        print("导入匿名新老用户 profile + track 混合数据(version=2.0) 完成, 数据量={}".format(total_count))
+        del already_identities
+        gc.collect()
 
-    def run_make_records(self, servers, count, list_count, concurrent_index):
-        print("导入 profile_set(匿名新用户, 125 个属性 version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
-        cnt = int(count / list_count)
+    def run_make_records(self, servers, already_identities, count, list_count, concurrent_index):
+        print("导入匿名新老用户 profile + track 混合数据(version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
+        cnt = int(count / 1000)
         for i in range(cnt):
-            test_data = self.make_profile_set_v2_more(list_count, concurrent_index)
-            import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+            test_data = self.make_track_profile_mixed_user(already_identities, concurrent_index, 1000)
+            result_batched = split_list(test_data, 100)
+            for batch in result_batched:
+                import_api(1, 1, batch, servers[random.randint(0, len(servers) - 1)])
         return count
 
-    def make_profile_set_v2_more(self, count, concurrent_index):
-        profile_set_list = []
-        profile_set_identity_list = []
-        genders = ['男', '女', '未填写']
-        first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
-        citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
-        careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
-        for i in range(count):
-            profile_set_json = deepcopy(self.profile_set_v2_more)
-            profile_set_identity_json = deepcopy(self.profile_set_v2_identities)
-            device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
-                random.randint(1000000, 9999999)) + str(concurrent_index)
-            profile_set_identity_json['distinct_id'] = device_id
-            profile_set_identity_list.append(profile_set_identity_json)
-
-            profile_set_json['distinct_id'] = device_id
-            profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
-                random.randint(1000000, 9999999))
-            profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
-            profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
-                random.randint(0, len(first_visit_source_list) - 1)]
-            profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
-            profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),
-                                                                       random.randint(1, 12),
-                                                                       random.randint(1, 28)).strftime('%Y-%m-%d')
-            phone_prefix = random.choice(['133', '149', '153', '173', '177', '180', '181', '189', '191', '199'])
-            phone_suffix = ''.join(random.choice('0123456789') for _ in range(8))
-            profile_set_json['properties']['phone_number'] = phone_prefix + phone_suffix
-            profile_set_json['properties']['career'] = careers[random.randint(0, len(careers) - 1)]
-
-            profile_set_list.append(profile_set_json)
-        with open(self.file_name, 'a') as f:
-            for item in profile_set_identity_list:
-                f.write(json.dumps(item) + '\n')
-        return profile_set_list
+    def make_track_profile_mixed_user(self, already_identities, concurrent_index, count):
+        jsonStringV2 = []
+        num = 1
+        profile_count = 0
+        track_count = 0
+        while num <= count:
+            if num % 20 == 0:
+                profile_count += 1
+                profile_set_json = deepcopy(self.profile_set_v2_more)
+                genders = ['男', '女', '未填写']
+                first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
+                citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
+                careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
+                if profile_count % 50 == 0:
+                    distinct_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
+                        random.randint(1000000, 9999999)) + str(concurrent_index)
+                else:
+                    index = random.randint(0, len(already_identities) - 1)
+                    distinct_id = already_identities[index]['distinct_id']
+                profile_set_json['distinct_id'] = distinct_id
+                profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
+                    random.randint(1000000, 9999999))
+                profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
+                profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
+                    random.randint(0, len(first_visit_source_list) - 1)]
+                profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
+                profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),
+                                                                           random.randint(1, 12),
+                                                                           random.randint(1, 28)).strftime('%Y-%m-%d')
+                phone_prefix = random.choice(['133', '149', '153', '173', '177', '180', '181', '189', '191', '199'])
+                phone_suffix = ''.join(random.choice('0123456789') for _ in range(8))
+                profile_set_json['properties']['phone_number'] = phone_prefix + phone_suffix
+                profile_set_json['properties']['career'] = careers[random.randint(0, len(careers) - 1)]
+                jsonStringV2.append(deepcopy(profile_set_json))
+            else:
+                track_count += 1
+                track_json = deepcopy(self.track_v2)
+                if track_count % 50 == 0:
+                    distinct_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
+                        random.randint(1000000, 9999999)) + str(concurrent_index)
+                else:
+                    index = random.randint(0, len(already_identities) - 1)
+                    distinct_id = already_identities[index]['distinct_id']
+                track_json.update({"distinct_id": distinct_id})
+                track_json.update({"time": int(time.time() * 1000) + num})
+                track_json["properties"].update({"$device_id": distinct_id})
+                track_json["properties"].update({"num": str(num)})
+                _flush_time = str(random.randint(1000000, 9999999)) + str(num)
+                track_json["properties"].update({"case_id": _flush_time})
+                track_json["properties"].update({"case_text": "一二三四五" + str(num)})
+                track_json["properties"].update({"order": str(num)})
+                track_json.update({"_track_id": random.randint(1000000, 9999999999)})
+                jsonStringV2.append(deepcopy(track_json))
+            num += 1
+        return jsonStringV2
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set (匿名新用户, 125个属性)"
+        qps_detail['title'] = "profile + track (匿名新老用户混合)"
         return qps_detail
 
     def do_import_test(self, exec_ip, project_name, count, import_mode):
-        self.clean_path(self.file_name)
         self.clean_path(self.import_file_name)
+        with open(self.file_name, 'r') as f:
+            json_data = f.readlines()
+        already_identities = [json.loads(line.strip()) for line in json_data]
         with open(self.import_file_name, "w") as f:
             for i in range(0, count):
-                ret = self.make_profile_set_v2_more(1, i)
+                ret = self.make_track_profile_mixed_user(already_identities, i, 1)
                 f.write(json.dumps(ret[0]) + '\n')
 
         self.cost = exec_importer(exec_ip, project_name, self.import_file_name, import_mode)
@@ -247,6 +278,6 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
 
     def collect_import_qps(self, count):
         qps_detail = {}
-        qps_detail['title'] = "profile_set (匿名新用户, 125个属性)-importer"
+        qps_detail['title'] = "profile + track (匿名新老用户混合)-importer"
         qps_detail['avg_qps'] = count / self.cost
         return qps_detail

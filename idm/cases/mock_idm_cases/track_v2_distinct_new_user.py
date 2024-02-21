@@ -13,7 +13,7 @@ false = False
 true = True
 
 
-class IdmTrackV2DistinctNewUserCase(TestCase):
+class MockIdmTrackDistinctNewUserCase(TestCase):
 
     def __init__(self):
         super().__init__()
@@ -30,11 +30,11 @@ class IdmTrackV2DistinctNewUserCase(TestCase):
 
     def do_test(self, servers, count, list_count, proportion=0):
         print("开始导入 track (Mock IDM, 匿名新用户, version=2.0) 数据, 数据量={}".format(count))
-        # 单个并发最多导 200w 数据
-        if count % 2000000 == 0:
-            concurrent_num = int(count / 2000000)
+        # 单个并发最多导 100w 数据
+        if count % 1000000 == 0:
+            concurrent_num = int(count / 1000000)
         else:
-            concurrent_num = int(count / 2000000) + 1
+            concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
         with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
@@ -75,5 +75,5 @@ class IdmTrackV2DistinctNewUserCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "匿名新用户 track (Mock IDM)"
+        qps_detail['title'] = "track (匿名新用户)"
         return qps_detail

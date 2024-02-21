@@ -4,6 +4,7 @@ import json
 import random
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
@@ -240,7 +241,7 @@ class IdmProfileSetV3DistinctOldUserMorePropsCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set 老用户(125个属性, 属性发生变更)"
+        qps_detail['title'] = "profile_set (匿名老用户, 125个属性, 属性发生变更)"
         return qps_detail
 
     def do_import_test(self, exec_ip, project_name, count, import_mode):

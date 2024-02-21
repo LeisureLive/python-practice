@@ -13,6 +13,7 @@ false = False
 true = True
 username = 'root'
 
+
 def get_pwd():
     url = 'http://security.sensorsdata.cn/qa_auth'
     header = {
@@ -25,6 +26,7 @@ def get_pwd():
         raise RuntimeError('get %s error %s, %s' % (url, resp.status_code, resp.text))
     # print(resp.text)
     return resp.text
+
 
 def get_sdi_version(ip):
     versions = exec_command(ip, "su - sa_cluster -c 'aradmin version' ")
@@ -39,6 +41,7 @@ def get_sdi_version(ip):
         print("未找到匹配的信息")
         return 'unknown'
 
+
 def get_horizon_version(ip):
     versions = exec_command(ip, "su - sa_cluster -c 'aradmin version' ")
     matches = re.findall(r"│\s+horizon\s+│\s+(\d+\.\d+\.\d+\.\d+)\s+│\s+(\w+)\s+│", versions)
@@ -52,6 +55,7 @@ def get_horizon_version(ip):
         print("未找到匹配的信息")
         return 'unknown'
 
+
 def close_mock_idm(ip):
     exec_command(ip,
                  "su - sa_cluster -c 'sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_mock -v false --unstable ' ")
@@ -61,11 +65,12 @@ def open_idm_mock(ip):
     exec_command(ip,
                  "su - sa_cluster -c 'sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_mock -v true --unstable ' ")
 
+
 def exec_command(ip, cmd):
     print('cmd:' + cmd)
-    retries = 0
+    retries = 1
     ssh = paramiko.SSHClient()
-    while retries < 3:
+    while retries <= 3:
         try:
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname=ip, username=username, password=get_pwd(), timeout=120)
@@ -78,10 +83,12 @@ def exec_command(ip, cmd):
         except paramiko.SSHException as e:
             print(f"SSH connection failed: {e}")
             retries += 1
+            time.sleep(retries * 10)
             print(f"Retrying... ({retries}/3)")
         except Exception as e:
             print(f"An error occurred: {e}")
             retries += 1
+            time.sleep(retries * 10)
             print(f"Retrying... ({retries}/3)")
         finally:
             if ssh.get_transport() is not None:
@@ -101,6 +108,7 @@ def split_list(input_list, batch_size):
     list of lists: 切分后的子列表
     """
     return [input_list[i:i + batch_size] for i in range(0, len(input_list), batch_size)]
+
 
 def exec_importer(ip, project, file, import_mode):
     remote_file_path = "/sensorsdata/main/runtime/idm-case/"
@@ -126,6 +134,7 @@ def exec_importer(ip, project, file, import_mode):
     start_time = time.time()
     exec_command(ip, 'su - sa_cluster -c "{}"'.format(cmd))
     return time.time() - start_time
+
 
 def get_ips_from_hosts(ip):
     paragraph = exec_command(ip, "su - sa_cluster -c 'cat /etc/hosts' ")

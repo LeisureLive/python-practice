@@ -51,11 +51,11 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
         else:
             print("文件 {} 不存在".format(self.file_name))
 
-        # 单个并发最多导 200w 数据
-        if count % 2000000 == 0:
-            concurrent_num = int(count / 2000000)
+        # 单个并发最多导 100w 数据
+        if count % 1000000 == 0:
+            concurrent_num = int(count / 1000000)
         else:
-            concurrent_num = int(count / 2000000) + 1
+            concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
         with ThreadPoolExecutor(max_workers=concurrent_num) as executor:

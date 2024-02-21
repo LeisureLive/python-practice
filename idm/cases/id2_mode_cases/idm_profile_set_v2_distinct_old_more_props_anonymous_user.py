@@ -4,6 +4,7 @@ import json
 import random
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
@@ -14,17 +15,15 @@ false = False
 true = True
 
 
-class IdmProfileSetV2DistinctOldLoginUserMorePropsCase(TestCase):
+class IdmProfileSetV2DistinctOldUserMorePropsCase(TestCase):
 
     def __init__(self, build_user, identification):
         super().__init__()
-        self.file_name = "profile_set_v2_more_{}_{}.json".format(build_user, identification)
-        self.import_file_name = "IdmProfileSetV2DistinctOldLoginUserMorePropsCase_{}_{}_importer.json".format(build_user, identification)
+        self.file_name = "profile_set_v2_more_anonymous_{}_{}.json".format(build_user, identification)
+        self.import_file_name = "IdmProfileSetV2DistinctOldUserMorePropsCase_{}_{}_importer.json".format(build_user, identification)
         self.cost = 0
         self.profile_set_v2_more = {
             "distinct_id": "",
-            "anonymous_id": "",
-            "login_id": "",
             "properties": {
                 "account": "123123123",
                 "client_id": "12312312",
@@ -159,19 +158,38 @@ class IdmProfileSetV2DistinctOldLoginUserMorePropsCase(TestCase):
         }
 
     def do_test(self, servers, count, list_count, proportion=0):
-        cnt = int(1200000 / list_count)
-        print("开始导入 profile_set(登录老用户, 125个属性 version=2.0) 数据, 数据量={}".format(1200000))
+        count = count * 3
+        print("开始导入 profile_set(匿名老用户, 125个属性 version=2.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
-        for i in range(cnt):
-            test_data = self.make_profile_set_v2_more_old_user(list_count, already_identities)
-            import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+        # 单个并发最多导 200w 数据
+        if count % 2000000 == 0:
+            concurrent_num = int(count / 2000000)
+        else:
+            concurrent_num = int(count / 2000000) + 1
+        avg_count = int(count / concurrent_num)
+        futures = []
+        with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
+            for i in range(concurrent_num):
+                future = executor.submit(self.run_make_records, servers, already_identities, avg_count, list_count, i)
+                futures.append(future)
+        total_count = 0
+        for future in futures:
+            total_count += future.result()
+        print("导入 profile_set(匿名老用户, 125个属性 version=2.0) 数据完成")
         del already_identities
         gc.collect()
-        print("导入老用户 profile_set(登录老用户, 125个属性 version=2.0) 数据完成")
 
-    def make_profile_set_v2_more_old_user(self, count, already_identities):
+    def run_make_records(self, servers, already_identities, count, list_count, concurrent_index):
+        print("导入 profile_set(匿名老用户, 125 个属性 version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
+        cnt = int(count / list_count)
+        for i in range(cnt):
+            test_data = self.make_profile_set_v2_more_old_user(list_count, already_identities, concurrent_index)
+            import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+        return count
+
+    def make_profile_set_v2_more_old_user(self, count, already_identities, concurrent_index):
         profile_set_list = []
         genders = ['男', '女', '未填写']
         first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
@@ -180,11 +198,8 @@ class IdmProfileSetV2DistinctOldLoginUserMorePropsCase(TestCase):
         for i in range(count):
             profile_set_json = deepcopy(self.profile_set_v2_more)
             index = random.randint(0, len(already_identities) - 1)
-            anonymous_id = already_identities[index]['anonymous_id']
-            login_id = already_identities[index]['login_id']
-            profile_set_json['anonymous_id'] = anonymous_id
-            profile_set_json['login_id'] = login_id
-            profile_set_json['distinct_id'] = login_id
+            distinct_id = already_identities[index]['distinct_id']
+            profile_set_json['distinct_id'] = distinct_id
             profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
                 random.randint(1000000, 9999999))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
@@ -204,7 +219,7 @@ class IdmProfileSetV2DistinctOldLoginUserMorePropsCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set (登录老用户, 125个属性, 属性产生变更)"
+        qps_detail['title'] = "profile_set (匿名老用户, 125个属性, 属性产生变更)"
         return qps_detail
 
     def do_import_test(self, exec_ip, project_name, count, import_mode):
@@ -215,7 +230,7 @@ class IdmProfileSetV2DistinctOldLoginUserMorePropsCase(TestCase):
         self.clean_path(self.import_file_name)
         with open(self.import_file_name, "w") as f:
             for i in range(0, count):
-                ret = self.make_profile_set_v2_more_old_user(1, already_identities)
+                ret = self.make_profile_set_v2_more_old_user(1, already_identities, i)
                 f.write(json.dumps(ret[0]) + '\n')
 
         self.cost = exec_importer(exec_ip, project_name, self.import_file_name, import_mode)
@@ -223,6 +238,6 @@ class IdmProfileSetV2DistinctOldLoginUserMorePropsCase(TestCase):
 
     def collect_import_qps(self, count):
         qps_detail = {}
-        qps_detail['title'] = "profile_set (登录老用户, 125个属性, 属性产生变更)-importer"
+        qps_detail['title'] = "profile_set (匿名老用户, 125个属性, 属性产生变更)-importer"
         qps_detail['avg_qps'] = count / self.cost
         return qps_detail

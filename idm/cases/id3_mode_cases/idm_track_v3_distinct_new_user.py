@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
@@ -98,7 +99,7 @@ class IdmTrack3DistinctNewUserCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "新用户 track 事件"
+        qps_detail['title'] = "track (匿名新用户)"
         return qps_detail
 
     def do_import_test(self, exec_ip, project_name, count, import_mode):

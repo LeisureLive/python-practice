@@ -4,6 +4,7 @@ import random
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
@@ -108,5 +109,5 @@ class IdmProfileSetV3DistinctNewUserLessPropsCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set 新用户(单个属性)"
+        qps_detail['title'] = "profile_set (匿名新用户, 单个属性)"
         return qps_detail

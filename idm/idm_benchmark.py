@@ -6,17 +6,20 @@ import time
 
 import requests
 
-from idm.cases.cmpt_mode_cases.idm_profile_set_v2_distinct_new_more_props_anonymous_user import \
+from idm.cases.id2_mode_cases.idm_profile_set_v2_distinct_new_more_props_anonymous_user import \
     IdmProfileSetV2DistinctNewUserMorePropsCase
-from idm.cases.cmpt_mode_cases.idm_profile_set_v2_distinct_new_more_props_login_user import \
+from idm.cases.id2_mode_cases.idm_profile_set_v2_distinct_new_more_props_login_user import \
     IdmProfileSetV2DistinctNewLoginUserMorePropsCase
-from idm.cases.cmpt_mode_cases.idm_profile_set_v2_distinct_old_more_props_anonymous_user import \
+from idm.cases.id2_mode_cases.idm_profile_set_v2_distinct_old_more_props_anonymous_user import \
     IdmProfileSetV2DistinctOldUserMorePropsCase
-from idm.cases.cmpt_mode_cases.idm_profile_set_v2_distinct_old_more_props_login_user import \
+from idm.cases.id2_mode_cases.idm_profile_set_v2_distinct_old_more_props_login_user import \
     IdmProfileSetV2DistinctOldLoginUserMorePropsCase
-from idm.cases.cmpt_mode_cases.idm_track_profile_v2_mixed_user import IdmTrackProfileV2MixedUserCase
-from idm.cases.cmpt_mode_cases.idm_track_v2_distinct_new_user import IdmTrackV2DistinctNewUserCase
-from idm.cases.cmpt_mode_cases.idm_track_v2_distinct_old_user import IdmTrackV2DistinctOldUserCase
+from idm.cases.id2_mode_cases.idm_track_profile_v2_mixed_user import IdmTrackProfileV2MixedUserCase
+from idm.cases.id2_mode_cases.idm_track_v2_distinct_new_user import IdmTrackV2DistinctNewUserCase
+from idm.cases.id2_mode_cases.idm_track_v2_distinct_old_anonymous_multi_user import \
+    IdmTrackV2DistinctAnonymousMultiUserCase
+from idm.cases.id2_mode_cases.idm_track_v2_distinct_new_login_multi_user import IdmTrackV2DistinctNewLoginMultiUserCase
+from idm.cases.id2_mode_cases.idm_track_v2_distinct_old_user import IdmTrackV2DistinctOldUserCase
 from idm.cases.id3_mode_cases.idm_profile_set_v3_distinct_new_more_props import \
     IdmProfileSetV3DistinctNewUserMorePropsCase
 from idm.cases.id3_mode_cases.idm_profile_set_v3_distinct_old_more_props import \
@@ -24,6 +27,9 @@ from idm.cases.id3_mode_cases.idm_profile_set_v3_distinct_old_more_props import 
 from idm.cases.id3_mode_cases.idm_track_profile_v3_mixed_user import IdmTrackProfileV3MixedUserCase
 from idm.cases.id3_mode_cases.idm_track_v3_distinct_new_user import IdmTrack3DistinctNewUserCase
 from idm.cases.id3_mode_cases.idm_track_v3_distinct_old_user import IdmTrack3DistinctOldUserCase
+from idm.cases.mock_idm_cases.profile_set_v2_distinct_new_more_props_anonymous_user import \
+    MockIdmProfileSetDistinctNewUserMorePropsCase
+from idm.cases.mock_idm_cases.track_v2_distinct_new_user import MockIdmTrackDistinctNewUserCase
 from idm.tools.common_tools import exec_command, check_is_cluster, restart_module, pause_module, start_module, \
     waiting_sdi_consume_latency, clear_log, get_ips_from_hosts, get_sdi_version, get_horizon_version, close_mock_idm, \
     open_idm_mock
@@ -31,7 +37,7 @@ from idm.tools.email_tool import send_benchmark_result
 
 sys.path.append('..')
 
-global cmpt_project_qps_list
+global id2_project_qps_list
 global id3_project_qps_list
 
 
@@ -100,25 +106,30 @@ def optimize_skv(ip, skip_init):
 
 
 # 创建项目
-def create_new_project(ip, project_name, idm_mode, skip_init):
+def create_new_project(ip, project_name, idm_mode, idm_engine_type, skip_init):
     if skip_init:
         return
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
                  .format(project_name, project_name))
-    if idm_mode == 'v3.0':
-        time.sleep(5)
+    time.sleep(5)
+    if idm_mode == 'id2':
+        if idm_engine_type == 'default':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup"'
+                         .format(project_name))
+        elif idm_engine_type == 'fast_mode':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                         .format(project_name))
+    elif idm_mode == 'id3':
         exec_command(ip,
                      'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
                      .format(project_name))
-    if idm_mode == 'fast_mode':
-        time.sleep(5)
-        exec_command(ip,
-                     'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
-                     .format(project_name))
-        exec_command(ip,
-                     'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
-                     .format(project_name))
+        if idm_engine_type == 'fast_mode':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                         .format(project_name))
 
 
 def _make_common_content_template(status, build_url, cucumber_dict: dict):
@@ -161,7 +172,7 @@ def push_result(ip_list, build_user_id, build_url, webhook, import_mode):
     cucumber_dict.update({"环境类型": env_type})
     cucumber_dict.update({'sdi 版本': sdi_version})
     cucumber_dict.update({'horizon 版本': horizon_version})
-    for case_qps in cmpt_project_qps_list:
+    for case_qps in id2_project_qps_list:
         key = "[兼容模式] " + str(case_qps['title'])
         if import_mode != "chain":
             value = " avg_qps=" + str(int(case_qps['avg_qps']))
@@ -219,11 +230,13 @@ if __name__ == "__main__":
     parser.add_argument('-id2_mode_data_count', type=int, default=0, help='id2_mode_data_count')
     parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
     parser.add_argument('-mock_idm_data_count', type=int, default=0, help='mock_idm_data_count')
-    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_cmpt', help='id2_mode_project_name')
+    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2', help='id2_mode_project_name')
     parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3', help='id3_mode_project_name')
     parser.add_argument('-mock_idm_project_name', type=str, default='benchmark_mock_idm', help='mock_idm_project_name')
+    parser.add_argument('-idm_engine_type', type=str, default='default', help='default/fast_mode')
     parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
-    parser.add_argument('-import_mode', type=str, help='导入模式：chain / hdfs_importer / importer / importer_v2')
+    parser.add_argument('-import_mode', type=str, default="chain",
+                        help='导入模式：chain / hdfs_importer / importer / importer_v2')
     parser.add_argument('-result_delivery_method', type=str, default="push", help='结果通知方式: push(微信机器人推送)/email(邮件通知)')
     parser.add_argument('-receiver_emails', type=str, help='邮件通知接收人地址, 多个邮箱地址使用 ; 进行分隔')
     args = parser.parse_args()
@@ -239,16 +252,17 @@ if __name__ == "__main__":
     id2_mode_data_count = args.id2_mode_data_count
     id3_mode_data_count = args.id3_mode_data_count
     mock_idm_data_count = args.mock_idm_data_count
+    idm_engine_type = args.idm_engine_type
     # 1、对 skv 内存进行调优
     optimize_skv(exec_ip, skip_init)
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
     open_idm_optimize_trigger(exec_ip, skip_init)
-    # 3、对兼容模式项目进行测试
-    cmpt_project_qps_list = []
+    # 3、对 id2 项目进行测试
+    id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
         project_name = args.id2_mode_project_name
-        create_new_project(exec_ip, project_name, 'v3.0-cmpt', skip_init)
+        create_new_project(exec_ip, project_name, 'id2', idm_engine_type, skip_init)
         identification = time.time()
         test_cases = [
             # IdmProfileSetV2DistinctNewUserLessPropsCase(args.build_user_id, identification),
@@ -258,7 +272,9 @@ if __name__ == "__main__":
             IdmProfileSetV2DistinctOldLoginUserMorePropsCase(args.build_user_id, identification),
             IdmTrackV2DistinctNewUserCase(args.build_user_id, identification),
             IdmTrackV2DistinctOldUserCase(args.build_user_id, identification),
-            IdmTrackProfileV2MixedUserCase(args.build_user_id, identification)
+            IdmTrackProfileV2MixedUserCase(args.build_user_id, identification),
+            IdmTrackV2DistinctNewLoginMultiUserCase(args.build_user_id, identification),
+            IdmTrackV2DistinctAnonymousMultiUserCase(args.build_user_id, identification)
         ]
         servers = []
         for ip in ip_list:
@@ -268,7 +284,7 @@ if __name__ == "__main__":
         for test_case in test_cases:
             if import_mode != "chain":
                 test_case.do_import_test(exec_ip, project_name, id2_mode_data_count, import_mode)
-                cmpt_project_qps_list.append(test_case.collect_import_qps(id2_mode_data_count))
+                id2_project_qps_list.append(test_case.collect_import_qps(id2_mode_data_count))
             else:
                 pause_module(exec_ip, "edge", "edge")
                 start_module(exec_ip, "integrator", "scheduler")
@@ -278,13 +294,14 @@ if __name__ == "__main__":
                 clear_log(exec_ip)
                 test_case.do_test(servers, id2_mode_data_count, list_count)
                 start_module(exec_ip, "integrator", "scheduler")
-                cmpt_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
+                qps_detail = test_case.collect_qps(exec_ip, id2_mode_data_count)
+                id2_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
 
     # 5、对 id3_mode_cases 项目进行测试
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
         project_name = args.id3_mode_project_name
-        create_new_project(exec_ip, project_name, 'v3.0', skip_init)
+        create_new_project(exec_ip, project_name, 'id3', idm_engine_type, skip_init)
         identification = time.time()
         test_cases = [
             # IdmProfileSetV3DistinctNewUserLessPropsCase(args.build_user_id, identification),
@@ -319,13 +336,13 @@ if __name__ == "__main__":
     if mock_idm_data_count > 0:
         # 尝试创建项目, 已存在不会报错
         project_name = args.mock_idm_project_name
-        create_new_project(exec_ip, project_name, 'v3.0_cmpt_one', skip_init)
+        create_new_project(exec_ip, project_name, 'id2', idm_engine_type, skip_init)
         identification = time.time()
         # 开启 mock idm
         open_idm_mock(exec_ip)
         test_cases = [
-            IdmProfileSetV2DistinctNewUserMorePropsCase(args.build_user_id, identification),
-            IdmTrackV2DistinctNewUserCase()
+            MockIdmProfileSetDistinctNewUserMorePropsCase(),
+            MockIdmTrackDistinctNewUserCase()
         ]
 
         servers = []
@@ -340,14 +357,14 @@ if __name__ == "__main__":
             pause_module(exec_ip, "integrator", "scheduler")
             start_module(exec_ip, "edge", "edge")
             clear_log(exec_ip)
-            test_case.do_test(servers, id2_mode_data_count, list_count)
+            test_case.do_test(servers, mock_idm_data_count, list_count)
             start_module(exec_ip, "integrator", "scheduler")
-            mock_idm_case_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
+            mock_idm_case_qps_list.append(test_case.collect_qps(exec_ip, mock_idm_data_count))
         close_mock_idm(exec_ip)
 
     # 7、推送结果
     if args.result_delivery_method == 'email':
-        send_benchmark_result(ip_list, cmpt_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+        send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
                               'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', args.receiver_emails)
     else:
         push_result(ip_list, args.build_user_id, args.build_url, args.webhook, import_mode)

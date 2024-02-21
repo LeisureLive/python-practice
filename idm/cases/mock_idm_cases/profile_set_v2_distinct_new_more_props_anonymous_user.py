@@ -1,6 +1,4 @@
 import datetime
-import json
-import os
 import random
 import sys
 import time
@@ -16,9 +14,9 @@ false = False
 true = True
 
 
-class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
+class MockIdmProfileSetDistinctNewUserMorePropsCase(TestCase):
 
-    def __init__(self, build_user, identification):
+    def __init__(self):
         super().__init__()
         self.profile_set_v2_more = {
             "distinct_id": "",
@@ -161,16 +159,11 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
 
     def do_test(self, servers, count, list_count, proportion=0):
         print("开始导入 profile_set(Mock IDM, 匿名用户 125个属性 version=2.0) 数据, 数据量={}".format(count))
-        if os.path.exists(self.file_name):
-            print("文件 {} 存在，删除历史记录的用户信息".format(self.file_name))
-            os.remove(self.file_name)
+        # 单个并发最多导 100w 数据
+        if count % 1000000 == 0:
+            concurrent_num = int(count / 1000000)
         else:
-            print("文件 {} 不存在, 记录用户信息到此文件".format(self.file_name))
-        # 单个并发最多导 200w 数据
-        if count % 2000000 == 0:
-            concurrent_num = int(count / 2000000)
-        else:
-            concurrent_num = int(count / 2000000) + 1
+            concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
         with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
@@ -225,5 +218,5 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set (Mock IDM, 匿名用户 125个属性)"
+        qps_detail['title'] = "profile_set (匿名新用户 125个属性)"
         return qps_detail

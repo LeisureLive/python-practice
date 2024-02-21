@@ -272,7 +272,7 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set 新用户(125个属性)"
+        qps_detail['title'] = "profile_set (匿名新用户, 125个属性)"
         return qps_detail
 
     def do_import_test(self, exec_ip, project_name, count, import_mode):

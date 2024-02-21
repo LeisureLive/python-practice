@@ -21,7 +21,7 @@ from idm_for_customer.cases.id3_cmpt_cases.idm_track_v2_distinct_old_user import
 from idm_for_customer.common_tools import check_is_cluster, restart_module, start_module, waiting_sdi_consume_latency, pause_module, \
     clear_log, exec_command
 
-global cmpt_project_qps_list
+global id2_project_qps_list
 global id3_project_qps_list
 
 
@@ -125,7 +125,7 @@ def push_result(ips, build_user_id, build_url, webhook):
     if is_cluster:
         env_type = "集群"
     cucumber_dict.update({"环境类型": env_type})
-    for case_qps in cmpt_project_qps_list:
+    for case_qps in id2_project_qps_list:
         key = "[兼容模式] " + str(case_qps['title'])
         if is_cluster:
             avg_qps = int(case_qps['avg_qps']) * 3
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     # 2、尝试开启 idm_for_customer 的优化开关, 非特定版本可能会出现开启失败情况
     # open_idm_optimize_trigger()
     # 3、对兼容模式项目进行测试
-    cmpt_project_qps_list = []
+    id2_project_qps_list = []
     if cmpt_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
         create_new_project("benchmark_cmpt", 'v3.0-cmpt')
@@ -221,7 +221,7 @@ if __name__ == "__main__":
             clear_log()
             test_case.do_test(servers, cmpt_mode_data_count, list_count)
             start_module("integrator", "scheduler")
-            cmpt_project_qps_list.append(test_case.collect_qps(cmpt_mode_data_count))
+            id2_project_qps_list.append(test_case.collect_qps(cmpt_mode_data_count))
 
     # 5、对 id3_mode_cases 项目进行测试
     id3_project_qps_list = []
