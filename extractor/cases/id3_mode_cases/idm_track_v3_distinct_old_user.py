@@ -39,7 +39,6 @@ class IdmTrack3DistinctOldUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 3
         print("开始导入老用户 track(version=3.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()

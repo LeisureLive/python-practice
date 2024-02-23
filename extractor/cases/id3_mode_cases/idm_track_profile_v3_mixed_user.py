@@ -184,7 +184,6 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 3
         print("开始导入新老用户 profile + track 混合数据(version=3.0), 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()

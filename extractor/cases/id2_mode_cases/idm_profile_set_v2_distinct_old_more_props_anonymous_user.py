@@ -158,7 +158,6 @@ class IdmProfileSetV2DistinctOldUserMorePropsCase(TestCase):
         }
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 3
         print("开始导入 profile_set(匿名老用户, 125个属性 version=2.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
