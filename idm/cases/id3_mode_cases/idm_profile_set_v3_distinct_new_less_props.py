@@ -32,6 +32,7 @@ class IdmProfileSetV3DistinctNewUserLessPropsCase(TestCase):
                 "$lib_method": "code"
             },
             "properties": {
+                "$ip": "10.129.29.1",
                 "myprofile": false
             },
             "type": "profile_set"
@@ -97,6 +98,7 @@ class IdmProfileSetV3DistinctNewUserLessPropsCase(TestCase):
             profile_set_json['identities']['$identity_cookie_id'] = cookie
             profile_set_json['identities']['$identity_email'] = email
             profile_set_json['identities']['$identity_taobao_ouid'] = taobao
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]

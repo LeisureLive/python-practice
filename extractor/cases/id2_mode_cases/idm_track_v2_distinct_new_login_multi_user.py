@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
-from idm.cases.test_case import TestCase
-from idm.tools.common_tools import import_api, collect_sdi_qps, exec_importer
+from extractor.cases.test_case import TestCase
+from extractor.tools.common_tools import import_api, collect_extractor_qps, exec_importer
 
 false = False
 true = True
@@ -128,7 +128,7 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
         return track_v2_list
 
     def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+        qps_detail = collect_extractor_qps(exec_ip, data_count)
         qps_detail['title'] = "track (匿名用户关联同一登录id)"
         return qps_detail
 

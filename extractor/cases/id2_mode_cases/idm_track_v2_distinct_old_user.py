@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
-from idm_fast_mode.cases.test_case import TestCase
-from idm_fast_mode.common_tools import collect_sdi_qps, import_api
+from extractor.cases.test_case import TestCase
+from extractor.tools.common_tools import collect_extractor_qps, import_api, exec_importer
 
 false = False
 true = True
@@ -18,11 +18,14 @@ class IdmTrackV2DistinctOldUserCase(TestCase):
 
     def __init__(self, build_user, identification):
         super().__init__()
+        self.import_file_name = "IdmTrackV2DistinctOldUserCase_{}_{}_importer.json".format(build_user, identification)
+        self.cost = 0
         self.file_name = "profile_set_v2_more_anonymous_{}_{}.json".format(build_user, identification)
         self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4",
+                                        "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -31,18 +34,19 @@ class IdmTrackV2DistinctOldUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
+        count = count * 3
         print("开始导入 track(匿名老用户, version=2.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
-        # 单个并发最多导 200w 数据
-        if count % 2000000 == 0:
-            concurrent_num = int(count / 2000000)
+        # 单个并发最多导 100w 数据
+        if count % 1000000 == 0:
+            concurrent_num = int(count / 1000000)
         else:
-            concurrent_num = int(count / 2000000) + 1
+            concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
-        with ThreadPoolExecutor(max_workers=min(concurrent_num, 10)) as executor:
+        with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
             for i in range(concurrent_num):
                 future = executor.submit(self.run_make_records, servers, already_identities, avg_count, list_count, i)
                 futures.append(future)
@@ -71,7 +75,7 @@ class IdmTrackV2DistinctOldUserCase(TestCase):
             track_json.update({"distinct_id": distinct_id})
             track_json.update({"time": int(time.time() * 1000) + num})
             track_json["properties"].update({"$device_id": distinct_id})
-            track_json["properties"].update({"num": str(num)})
+            track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
             _flush_time = str(random.randint(1000000, 9999999)) + str(num)
             track_json["properties"].update({"case_id": _flush_time})
             track_json["properties"].update({"case_text": "一二三四五" + str(num)})
@@ -81,6 +85,26 @@ class IdmTrackV2DistinctOldUserCase(TestCase):
         return track_v2_list
 
     def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "track(匿名老用户, version=2.0)"
+        qps_detail = collect_extractor_qps(exec_ip, data_count)
+        qps_detail['title'] = "track (匿名老用户)"
+        return qps_detail
+
+    def do_import_test(self, exec_ip, project_name, count, import_mode):
+        with open(self.file_name, 'r') as f:
+            json_data = f.readlines()
+        already_identities = [json.loads(line.strip()) for line in json_data]
+
+        self.clean_path(self.import_file_name)
+        with open(self.import_file_name, "w") as f:
+            for i in range(0, count):
+                ret = self.make_track_v2_old_user(1, already_identities)
+                f.write(json.dumps(ret[0]) + '\n')
+
+        self.cost = exec_importer(exec_ip, project_name, self.import_file_name, import_mode)
+        print(self.cost)
+
+    def collect_import_qps(self, count):
+        qps_detail = {}
+        qps_detail['title'] = "匿名老用户 track 事件-importer"
+        qps_detail['avg_qps'] = count / self.cost
         return qps_detail

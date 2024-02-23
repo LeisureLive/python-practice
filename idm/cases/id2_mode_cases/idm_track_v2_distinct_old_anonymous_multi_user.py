@@ -25,7 +25,7 @@ class IdmTrackV2DistinctAnonymousMultiUserCase(TestCase):
         self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -76,7 +76,7 @@ class IdmTrackV2DistinctAnonymousMultiUserCase(TestCase):
             track_json.update({"distinct_id": anonymous_id})
             track_json.update({"time": int(time.time() * 1000) + num})
             track_json["properties"].update({"$device_id": anonymous_id})
-            track_json["properties"].update({"num": str(num)})
+            track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
             _flush_time = str(random.randint(1000000, 9999999)) + str(num)
             track_json["properties"].update({"case_id": _flush_time})
             track_json["properties"].update({"case_text": "一二三四五" + str(num)})

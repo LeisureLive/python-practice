@@ -25,7 +25,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
                          "identities": {"$identity_idfv": ""},
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -39,7 +39,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 4
+        count = count * 3
         print("开始导入老用户 track(version=3.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -93,6 +93,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
             track_json["identities"].update({"$identity_email": email})
             track_json["identities"].update({"$identity_taobao_ouid": taobao})
             _flush_time = str(random.randint(1000000, 9999999)) + str(num)
+            track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
             track_json["properties"].update({"case_id": _flush_time})
             track_json["properties"].update(
                 {"case_text": "一二三四五" + str(time.time() * 1000)})

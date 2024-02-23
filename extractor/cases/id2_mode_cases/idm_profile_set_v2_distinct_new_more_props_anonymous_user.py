@@ -9,30 +9,24 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
-from idm_fast_mode.cases.test_case import TestCase
-from idm_fast_mode.common_tools import collect_sdi_qps, import_api
+from extractor.cases.test_case import TestCase
+from extractor.tools.common_tools import collect_extractor_qps, import_api, exec_importer
 
 false = False
 true = True
 
 
-class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
+class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
 
     def __init__(self, build_user, identification):
-        self.file_name = "profile_set_v3_more_{}_{}.json".format(build_user, identification)
         super().__init__()
-        self.profile_set_v3_more = {
+        self.file_name = "profile_set_v2_more_anonymous_{}_{}.json".format(build_user, identification)
+        self.import_file_name = "IdmProfileSetV2DistinctNewUserMorePropsCase_{}_{}_importer.json".format(build_user, identification)
+        self.cost = 0
+        self.profile_set_v2_more = {
             "distinct_id": "",
-            "identities": {
-                "$identity_login_id": "",
-                "$identity_idfv": "",
-                "$identity_mobile": "",
-                "$identity_cookie_id": "",
-                "$identity_email": "",
-                "$identity_taobao_ouid": ""
-            },
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -164,26 +158,17 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
             "type": "profile_set"
         }
 
-        self.profile_set_v3_identities = {
-            "distinct_id": "",
-            "identities": {
-                "$identity_login_id": "",
-                "$identity_idfv": "",
-                "$identity_mobile": "",
-                "$identity_cookie_id": "",
-                "$identity_email": "",
-                "$identity_taobao_ouid": ""
-            }
+        self.profile_set_v2_identities = {
+            "distinct_id": ""
         }
 
     def do_test(self, servers, count, list_count, proportion=0):
-        print("开始导入 profile_set(125 个属性 version=3.0) 数据, 数据量={}".format(count))
+        print("开始导入 profile_set(匿名新用户 125 个属性 version=2.0) 数据, 数据量={}".format(count))
         if os.path.exists(self.file_name):
             print("文件 {} 存在，删除历史记录的用户信息".format(self.file_name))
             os.remove(self.file_name)
         else:
             print("文件 {} 不存在, 记录用户信息到此文件".format(self.file_name))
-
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
             concurrent_num = int(count / 1000000)
@@ -191,24 +176,24 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
-        with ThreadPoolExecutor(max_workers=min(concurrent_num, 10)) as executor:
+        with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
             for i in range(concurrent_num):
                 future = executor.submit(self.run_make_records, servers, avg_count, list_count, i)
                 futures.append(future)
         total_count = 0
         for future in futures:
             total_count += future.result()
-        print("导入 profile_set(125 个属性 version=3.0) 数据完成")
+        print("导入 profile_set(匿名新用户, 125 个属性 version=2.0) 数据完成, 数据量={}".format(total_count))
 
     def run_make_records(self, servers, count, list_count, concurrent_index):
-        print("导入 profile_set(125 个属性 version=3.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
+        print("导入 profile_set(匿名新用户, 125 个属性 version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / list_count)
         for i in range(cnt):
-            test_data = self.make_profile_set_v3_more(list_count, concurrent_index)
+            test_data = self.make_profile_set_v2_more(list_count, concurrent_index)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
-        return cnt * list_count
+        return count
 
-    def make_profile_set_v3_more(self, count, concurrent_index):
+    def make_profile_set_v2_more(self, count, concurrent_index):
         profile_set_list = []
         profile_set_identity_list = []
         genders = ['男', '女', '未填写']
@@ -216,40 +201,15 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
         citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
         careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
         for i in range(count):
-            profile_set_json = deepcopy(self.profile_set_v3_more)
-            profile_set_identity_json = deepcopy(self.profile_set_v3_identities)
+            profile_set_json = deepcopy(self.profile_set_v2_more)
+            profile_set_identity_json = deepcopy(self.profile_set_v2_identities)
             device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
                 random.randint(1000000, 9999999)) + str(concurrent_index)
-            login_id = 'user_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            idfv = 'idfv_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            mobile = 'mobile_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            cookie = 'cookie' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            email = 'email_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            taobao = 'taobao_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
             profile_set_identity_json['distinct_id'] = device_id
-            profile_set_identity_json['identities']['$identity_login_id'] = login_id
-            profile_set_identity_json['identities']['$identity_idfv'] = idfv
-            profile_set_identity_json['identities']['$identity_mobile'] = mobile
-            profile_set_identity_json['identities']['$identity_cookie_id'] = cookie
-            profile_set_identity_json['identities']['$identity_email'] = email
-            profile_set_identity_json['identities']['$identity_taobao_ouid'] = taobao
             profile_set_identity_list.append(profile_set_identity_json)
 
             profile_set_json['distinct_id'] = device_id
-            profile_set_json['identities']['$identity_login_id'] = login_id
-            profile_set_json['identities']['$identity_idfv'] = idfv
-            profile_set_json['identities']['$identity_mobile'] = mobile
-            profile_set_json['identities']['$identity_cookie_id'] = cookie
-            profile_set_json['identities']['$identity_email'] = email
-            profile_set_json['identities']['$identity_taobao_ouid'] = taobao
-            profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
-                random.randint(1000000, 9999999))
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]
@@ -269,6 +229,23 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
         return profile_set_list
 
     def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set(125个属性 version=3.0)"
+        qps_detail = collect_extractor_qps(exec_ip, data_count)
+        qps_detail['title'] = "profile_set (匿名新用户, 125个属性)"
+        return qps_detail
+
+    def do_import_test(self, exec_ip, project_name, count, import_mode):
+        self.clean_path(self.file_name)
+        self.clean_path(self.import_file_name)
+        with open(self.import_file_name, "w") as f:
+            for i in range(0, count):
+                ret = self.make_profile_set_v2_more(1, i)
+                f.write(json.dumps(ret[0]) + '\n')
+
+        self.cost = exec_importer(exec_ip, project_name, self.import_file_name, import_mode)
+        print(self.cost)
+
+    def collect_import_qps(self, count):
+        qps_detail = {}
+        qps_detail['title'] = "profile_set (匿名新用户, 125个属性)-importer"
+        qps_detail['avg_qps'] = count / self.cost
         return qps_detail

@@ -33,7 +33,7 @@ class IdmProfileSetV3DistinctOldUserMorePropsCase(TestCase):
                 "$identity_taobao_ouid": ""
             },
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -166,7 +166,7 @@ class IdmProfileSetV3DistinctOldUserMorePropsCase(TestCase):
         }
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 4
+        count = count * 3
         print("开始导入老用户 profile_set(125 个属性 version=3.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -222,8 +222,7 @@ class IdmProfileSetV3DistinctOldUserMorePropsCase(TestCase):
             profile_set_json['identities']['$identity_cookie_id'] = cookie
             profile_set_json['identities']['$identity_email'] = email
             profile_set_json['identities']['$identity_taobao_ouid'] = taobao
-            profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
-                random.randint(1000000, 9999999))
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]

@@ -1,3 +1,6 @@
+import os
+
+
 class TestCase:
 
     def __init__(self):
@@ -8,3 +11,10 @@ class TestCase:
 
     def collect_qps(self, exec_ip, data_count):
         pass
+
+    def clean_path(self, file_name):
+        if os.path.exists(file_name):
+            print("文件 {} 存在，删除历史记录的用户信息".format(file_name))
+            os.remove(file_name)
+        else:
+            print("文件 {} 不存在, 记录用户信息到此文件".format(file_name))

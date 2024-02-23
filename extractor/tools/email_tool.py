@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 
 from prettytable import PrettyTable
 
-from idm.tools.common_tools import get_sdi_version, get_horizon_version
+from extractor.tools.common_tools import get_sdf_version
 
 
 def send_email(sender_addr, password, receiver_addr, title, content):
@@ -28,45 +28,32 @@ def send_email(sender_addr, password, receiver_addr, title, content):
         print('error:', e)  # 打印错误
 
 
-def send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+def send_benchmark_result(ip_list, id2_project_qps_list, id3_project_qps_list,
                           sender_addr, password, receiver_addrs):
     if receiver_addrs is None:
         receiver_addrs = 'hejie@sensorsdata.cn'
 
     cluster_size = len(ip_list)
-    if idm_engine_type == 'default':
-        id2_mode = '[兼容模式] '
-        id3_mode = '[ID3 模式] '
-    else:
-        id2_mode = '[高性能尽可能关联 2 id] '
-        id3_mode = '[高性能 ID3] '
     # 测试结果
     table = PrettyTable(['数据集', 'avg_qps', 'min_qps', 'max_qps'])
     for case_qps in id2_project_qps_list:
         avg_qps = int(case_qps['avg_qps']) * cluster_size
         max_qps = int(case_qps['max_qps']) * cluster_size
         min_qps = int(case_qps['min_qps']) * cluster_size
-        table.add_row([id2_mode + case_qps['title'], avg_qps, min_qps, max_qps])
+        table.add_row(['[id2 多对一] ' + case_qps['title'], avg_qps, min_qps, max_qps])
     for case_qps in id3_project_qps_list:
         avg_qps = int(case_qps['avg_qps']) * cluster_size
         max_qps = int(case_qps['max_qps']) * cluster_size
         min_qps = int(case_qps['min_qps']) * cluster_size
-        table.add_row([id3_mode + case_qps['title'], avg_qps, min_qps, max_qps])
-    for case_qps in mock_idm_case_qps_list:
-        avg_qps = int(case_qps['avg_qps']) * cluster_size
-        max_qps = int(case_qps['max_qps']) * cluster_size
-        min_qps = int(case_qps['min_qps']) * cluster_size
-        table.add_row(["[Mock IDM] " + case_qps['title'], avg_qps, min_qps, max_qps])
+        table.add_row(['[id3] ' + case_qps['title'], avg_qps, min_qps, max_qps])
 
     data_html = table.get_html_string()
 
     # 正文
-    sdi_version = get_sdi_version(ip_list[0])
-    horizon_version = get_horizon_version(ip_list[0])
+    sdf_version = get_sdf_version(ip_list[0])
     content = ''
     content += "<p>机器 IP: " + f'{ip_list} </p>'
-    content += "<p>sdi 版本: " + f'{sdi_version} </p>'
-    content += "<p>horizon 版本: " + f'{horizon_version} </p>'
+    content += "<p>SDF 版本: " + f'{sdf_version} </p>'
 
     # 拼装 html
     title = '导入流性能 daily benchmark'
@@ -140,10 +127,7 @@ def send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_pr
     html_msg = "<html>" + head + body + "</html>"
 
     msg = MIMEMultipart()
-    if idm_engine_type == 'default':
-        subject = 'SDH 架构导入流性能测试结果(兼容模式引擎 + ID3 引擎) - ' + datetime.now().strftime("%Y-%m-%d")
-    else:
-        subject = 'SDH 架构导入流性能测试结果(高性能引擎) - ' + datetime.now().strftime("%Y-%m-%d")
+    subject = 'SDF 架构导入流性能测试结果(ID2 多对一 + ID3) - ' + datetime.now().strftime("%Y-%m-%d")
     msg['Subject'] = subject
     msg['From'] = sender_addr
     msg['To'] = receiver_addrs
@@ -165,9 +149,7 @@ def send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_pr
 if __name__ == '__main__':
     # send_email('enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', 'hejie@sensorsdata.com', '测试邮件', '这是一封测试邮件!')
     ip_list = ['10.129.24.143', '10.129.25.195', '10.129.26.59']
-    mode = 'chain'
     id2_project_qps_list = [{'title': 'profile_set', 'min_qps': 100, 'max_qps': 200, 'avg_qps': 150}]
     id3_project_qps_list = [{'title': 'profile_set (version=3.0)', 'min_qps': 100, 'max_qps': 200, 'avg_qps': 150}]
-    mock_idm_case_qps_list = [{'title': 'profile_set', 'min_qps': 500, 'max_qps': 1000, 'avg_qps': 750}]
-    send_benchmark_result(ip_list, mode, id2_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+    send_benchmark_result(ip_list, id2_project_qps_list, id3_project_qps_list,
                           'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', 'hejie@sensorsdata.com')

@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
-from idm_fast_mode.cases.test_case import TestCase
-from idm_fast_mode.common_tools import import_api, split_list, collect_sdi_qps
+from extractor.cases.test_case import TestCase
+from extractor.tools.common_tools import import_api, split_list, collect_extractor_qps, exec_importer
 
 false = False
 true = True
@@ -20,6 +20,8 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
 
     def __init__(self, build_user, identification):
         self.file_name = "profile_set_v3_more_{}_{}.json".format(build_user, identification)
+        self.import_file_name = "IdmTrackProfileV3MixedUserCase_{}_{}_importer.json".format(build_user, identification)
+        self.cost = 0
         super().__init__()
         self.profile_set_v3_more = {
             "distinct_id": "",
@@ -32,7 +34,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                 "$identity_taobao_ouid": ""
             },
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -168,7 +170,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                          "identities": {"$identity_idfv": ""},
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -182,7 +184,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 4
+        count = count * 3
         print("开始导入新老用户 profile + track 混合数据(version=3.0), 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -209,18 +211,18 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
         print("导入 新老用户 profile + track 混合数据(version=3.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / 1000)
         for i in range(cnt):
-            test_data = self.make_track_profile_mixed_user(already_identities, concurrent_index)
+            test_data = self.make_track_profile_mixed_user(already_identities, concurrent_index, 1000)
             result_batched = split_list(test_data, 100)
             for batch in result_batched:
                 import_api(1, 1, batch, servers[random.randint(0, len(servers) - 1)])
         return count
 
-    def make_track_profile_mixed_user(self, already_identities, concurrent_index):
+    def make_track_profile_mixed_user(self, already_identities, concurrent_index, count):
         jsonStringV3 = []
         num = 1
         profile_count = 0
         track_count = 0
-        while num <= 1000:
+        while num <= count:
             if num % 20 == 0:
                 profile_count += 1
                 profile_set_json = deepcopy(self.profile_set_v3_more)
@@ -257,8 +259,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                 profile_set_json['identities']['$identity_cookie_id'] = cookie
                 profile_set_json['identities']['$identity_email'] = email
                 profile_set_json['identities']['$identity_taobao_ouid'] = taobao
-                profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
-                    random.randint(1000000, 9999999))
+                profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
                 profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
                 profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                     random.randint(0, len(first_visit_source_list) - 1)]
@@ -307,6 +308,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                 track_json["identities"].update({"$identity_taobao_ouid": taobao})
                 _flush_time = str(random.randint(1000000, 9999999)) + str(num)
                 # NM_track.update({"_flush_time":int(_flush_time)})
+                track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
                 track_json["properties"].update({"case_id": _flush_time})
                 track_json["properties"].update(
                     {"case_text": "一二三四五" + str(time.time() * 1000)})
@@ -317,6 +319,26 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
         return jsonStringV3
 
     def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "新老用户 profile + track 混合数据(version=3.0)"
+        qps_detail = collect_extractor_qps(exec_ip, data_count)
+        qps_detail['title'] = "profile + track (匿名新老用户混合)"
+        return qps_detail
+
+    def do_import_test(self, exec_ip, project_name, count, import_mode):
+        with open(self.file_name, 'r') as f:
+            json_data = f.readlines()
+        already_identities = [json.loads(line.strip()) for line in json_data]
+
+        self.clean_path(self.import_file_name)
+        with open(self.import_file_name, "w") as f:
+            for i in range(0, count):
+                ret = self.make_track_profile_mixed_user(already_identities, 1, 1)
+                f.write(json.dumps(ret[0]) + '\n')
+
+        self.cost = exec_importer(exec_ip, project_name, self.import_file_name, import_mode)
+        print(self.cost)
+
+    def collect_import_qps(self, count):
+        qps_detail = {}
+        qps_detail['title'] = "新老用户 profile + track 混合数据-importer"
+        qps_detail['avg_qps'] = count / self.cost
         return qps_detail

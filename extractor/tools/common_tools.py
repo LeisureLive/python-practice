@@ -2,11 +2,12 @@ import base64
 import gzip
 import json
 import os
-import paramiko
 import re
-import requests
 import time
 import urllib
+
+import paramiko
+import requests
 
 false = False
 true = True
@@ -56,20 +57,6 @@ def exec_command(ip, cmd):
     return ""
 
 
-def split_list(input_list, batch_size):
-    """
-    将列表切分为指定批次大小的多个子列表
-
-    Parameters:
-    input_list (list): 要切分的列表
-    batch_size (int): 每个批次的大小
-
-    Returns:
-    list of lists: 切分后的子列表
-    """
-    return [input_list[i:i + batch_size] for i in range(0, len(input_list), batch_size)]
-
-
 def get_ips_from_hosts(ip):
     paragraph = exec_command(ip, "su - sa_cluster -c 'cat /etc/hosts' ")
 
@@ -82,6 +69,20 @@ def get_ips_from_hosts(ip):
                 ip_list.append(ip)
     ip_set = set(ip_list)
     return list(ip_set)
+
+
+def get_sdf_version(ip):
+    versions = exec_command(ip, "su - sa_cluster -c 'aradmin version' ")
+    matches = re.findall(r"│\s+sdf\s+│\s+(\d+\.\d+\.\d+\.\d+)\s+│\s+(\w+)\s+│", versions)
+
+    if matches:
+        version, level = matches[0]
+        print(f"SDF Version: {version}")
+        print(f"SDF Level: {level}")
+        return version + ' ' + level
+    else:
+        print("未找到匹配的信息")
+        return 'unknown'
 
 
 def match_valid_host(host_line):
@@ -104,7 +105,7 @@ def restart_module(ip, product, module):
 
 def pause_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "aradmin pause -p {} -m {} -d 86400" '.format(product, module))
-    exec_command(ip, 'su - sa_cluster -c "spadmin pause -p {} -m {}" '.format(product, module))
+    exec_command(ip, 'su - sa_cluster -c "spadmin stop -p {} -m {}" '.format(product, module))
 
 
 def start_module(ip, product, module):
@@ -112,37 +113,41 @@ def start_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "spadmin start -p {} -m {}" '.format(product, module))
 
 
-def check_sdi_exists_latency(ip):
-    result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency"')
-    if result.__contains__("don't exist latency"):
-        print("检测 sdi 无延迟")
-        return False
+def check_extractor_exists_latency(ip):
+    result = exec_command(ip, 'su - sa_cluster -c "sdfadmin latency extractor"')
+    if result.__contains__("total_latency_count"):
+        data = json.loads(result)
+        total_latency_count_value = data.get("total_latency_count", None)
+        if total_latency_count_value is not None and total_latency_count_value == 0:
+            return True
+        else:
+            return False
     else:
-        return True
+        return False
 
 
-def waiting_sdi_consume_latency(ip):
+def waiting_extractor_consume_latency(ip):
     i = 0
     while True:
-        result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency"')
-        if result.__contains__("don't exist latency"):
-            print("检测 sdi 无延迟")
-            break
-        elif i >= 120:
-            print("检测 sdi 存在延迟, 已等待超过40分钟, 请检查服务状态!")
-            time.sleep(20)
-            i = i + 1
+        result = exec_command(ip, 'su - sa_cluster -c "sdfadmin latency extractor"')
+        if result.__contains__("total_latency_count"):
+            data = json.loads(result)
+            total_latency_count_value = data.get("total_latency_count", None)
+            if total_latency_count_value is not None and total_latency_count_value == 0:
+                print("检测 extractor 无延迟")
+                break
+            else:
+                i = i + 1
+                print("检测 extractor 存在延迟, 已等待 {}s".format(20 * (i - 1)))
         else:
             i = i + 1
             time.sleep(20)
-            print("检测 sdi 存在延迟, 已等待 {}s".format(20 * (i - 1)))
+            print("检测 extractor 延迟失败, 已等待 {}s".format(20 * (i - 1)))
 
 
-def clear_log(ip):
-    is_cluster = check_is_cluster(ip)
-    if not is_cluster:
-        # 单机环境每个 case 压测前清空日志, 避免统计 qps 时拿到上一次的
-        exec_command(ip, 'su - sa_cluster -c "echo > /sensorsdata/main/logs/integrator/scheduler/chain.log"')
+def clear_log(ip_list):
+    for ip in ip_list:
+        exec_command(ip, 'su - sa_cluster -c "echo > /sensorsdata/main/logs/sdf/extractor/extractor.log"')
 
 
 def check_is_cluster(ip):
@@ -196,6 +201,43 @@ def import_api(gzipType, dataType, jsonString, server):
     s.keep_alive = False
     response = requests.post(server, data=payload, headers=headers)
 
+def exec_importer(ip, project, file, import_mode):
+    remote_file_path = "/sensorsdata/main/runtime/idm-case/"
+    exec_command(ip, f"su - sa_cluster -c 'rm -r {remote_file_path}'")
+    exec_command(ip, f"su - sa_cluster -c 'mkdir -p {remote_file_path}'")
+    cp_to(ip, f"./{file}", f"{remote_file_path + file}")
+    hdfs_path = "/sa/runtime/sgx-idm-temp"
+    exec_command(ip, f"su - sa_cluster -c 'hdfs dfs -rm -r -f -skipTrash {hdfs_path}'")
+    exec_command(ip, f"su - sa_cluster -c 'hdfs dfs -mkdir -p {hdfs_path}'")
+    exec_command(ip, f"su - sa_cluster -c 'hdfs dfs -put {remote_file_path + file} {hdfs_path}'")
+    cluster = check_is_cluster(ip)
+    if import_mode == "importer_v2":
+        cmd = f"integratoradmin importer_v2 --method submit_task --project {project} --path hdfs://{hdfs_path} --parallelism 3 --yjm 2048 --ytm 4096"
+    elif import_mode == "importer":
+        if not cluster:
+            cmd = f"integratoradmin importer run --project {project} --path file://{remote_file_path + file} --parallelism 1 --mem_mb 4096"
+        else:
+            cmd = f"integratoradmin importer run --project {project} --path hdfs://{hdfs_path} --parallelism 3 --yjm 2048 --ytm 4096"
+    elif import_mode == "hdfs_importer":
+        cmd = f"hdfs_importer --project {project} --path {hdfs_path} --mapper_max_memory_size_mb 2048 --reduce_max_memory_size_mb 4096 --event_mapper_max_size 3 --item_mapper_max_size 3 --profile_mapper_max_size 3"
+    else:
+        cmd = ""
+    start_time = time.time()
+    exec_command(ip, 'su - sa_cluster -c "{}"'.format(cmd))
+    return time.time() - start_time
+
+def split_list(input_list, batch_size):
+    """
+    将列表切分为指定批次大小的多个子列表
+
+    Parameters:
+    input_list (list): 要切分的列表
+    batch_size (int): 每个批次的大小
+
+    Returns:
+    list of lists: 切分后的子列表
+    """
+    return [input_list[i:i + batch_size] for i in range(0, len(input_list), batch_size)]
 
 def dealwith(gzipType, jsonString):
     data = json.dumps(jsonString, ensure_ascii=False)
@@ -209,29 +251,20 @@ def dealwith(gzipType, jsonString):
     return Udata
 
 
-def collect_sdi_qps(ip, data_count):
+def collect_extractor_qps(ip, data_count):
     i = 0
-    while check_sdi_exists_latency(ip):
+    while check_extractor_exists_latency(ip):
         time.sleep(20)
-        print("等待 sdi 数据处理完成, 已等待{}s".format(i * 20))
+        print("等待 extractor 数据处理完成, 已等待{}s".format(i * 20))
         i += 1
-        if i * 20 == 600:
-            pause_module(ip, 'edge', 'edge')
-    print("sdi 数据处理完成, 开始统计qps")
-    qps = check_sdi_qps(ip, 30, data_count)
+    print("extractor 数据处理完成, 开始统计qps")
+    qps = check_extractor_qps(ip, 30, data_count)
     return qps
 
 
-def check_sdi_qps(ip, line_count, data_count):
-    is_cluster = check_is_cluster(ip)
-    if is_cluster:
-        exec_command(ip,
-                     'su - sa_cluster -c "yarn app -list | grep chain | awk -F \' \' \'{print $1}\'| xargs yarn logs -applicationId | grep \'speed info\' | tail -n ' + str(
-                         line_count) + ' > /home/sa_cluster/log_data.log"')
-    else:
-        exec_command(ip,
-                     'su - sa_cluster -c "grep \\"entry processed speed info\\" /sensorsdata/main/logs/integrator/scheduler/chain.log | tail -n ' + str(
-                         line_count) + ' > /home/sa_cluster/log_data.log"')
+def check_extractor_qps(ip, line_count, data_count):
+    exec_command(ip,
+                 'su - sa_cluster -c "grep speed /sensorsdata/main/logs/sdf/extractor/extractor.log | tail -n 80  > /home/sa_cluster/log_data.log"')
 
     time.sleep(5)
     identification = time.time()
@@ -243,7 +276,7 @@ def check_sdi_qps(ip, line_count, data_count):
     speed_data_list = []
 
     for line in log_data:
-        match = re.search(r'speed=(\d+)', line)
+        match = re.search(r'Extractor send speed: (\d+) records/sec', line)
         if match:
             speed_value = match.group(1)
             speed_data_list.append(int(speed_value))

@@ -15,10 +15,10 @@ from idm.cases.id2_mode_cases.idm_profile_set_v2_distinct_old_more_props_anonymo
 from idm.cases.id2_mode_cases.idm_profile_set_v2_distinct_old_more_props_login_user import \
     IdmProfileSetV2DistinctOldLoginUserMorePropsCase
 from idm.cases.id2_mode_cases.idm_track_profile_v2_mixed_user import IdmTrackProfileV2MixedUserCase
+from idm.cases.id2_mode_cases.idm_track_v2_distinct_new_login_multi_user import IdmTrackV2DistinctNewLoginMultiUserCase
 from idm.cases.id2_mode_cases.idm_track_v2_distinct_new_user import IdmTrackV2DistinctNewUserCase
 from idm.cases.id2_mode_cases.idm_track_v2_distinct_old_anonymous_multi_user import \
     IdmTrackV2DistinctAnonymousMultiUserCase
-from idm.cases.id2_mode_cases.idm_track_v2_distinct_new_login_multi_user import IdmTrackV2DistinctNewLoginMultiUserCase
 from idm.cases.id2_mode_cases.idm_track_v2_distinct_old_user import IdmTrackV2DistinctOldUserCase
 from idm.cases.id3_mode_cases.idm_profile_set_v3_distinct_new_more_props import \
     IdmProfileSetV3DistinctNewUserMorePropsCase
@@ -39,6 +39,7 @@ sys.path.append('..')
 
 global id2_project_qps_list
 global id3_project_qps_list
+global mock_idm_case_qps_list
 
 
 def open_idm_optimize_trigger(ip, skip_init):
@@ -50,8 +51,6 @@ def open_idm_optimize_trigger(ip, skip_init):
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 4 --unstable" ')
-    exec_command(ip,
-                 'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
     exec_command(ip,
@@ -67,6 +66,13 @@ def open_idm_optimize_trigger(ip, skip_init):
     if check_is_cluster(ip):
         exec_command(ip,
                      'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 4096 --unstable" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
+    else:
+        # 单机环境需要调整 scheduler 进程的内存大小
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
+
     restart_module(ip, "edge", "edge")
     restart_module(ip, "horizon", "identity_skv_proxy")
     restart_module(ip, "integrator", "scheduler")
@@ -154,11 +160,11 @@ def _make_common_content_template(status, build_url, cucumber_dict: dict):
         describe_result += '<font color=\"comment\">构建地址:{}</font> \n >'.format(build_url)
         describe_result += '[构建地址]({}) \n >'.format(build_url)
 
-    result = '## BENCHMARK 测试结果 \n >' + describe_result
+    result = '## SDH 架构导入流 BENCHMARK 测试结果 \n >' + describe_result
     return result
 
 
-def push_result(ip_list, build_user_id, build_url, webhook, import_mode):
+def push_result(ip_list, idm_engine_type, build_user_id, build_url, webhook, import_mode):
     cucumber_dict = {}
     cucumber_dict.update({"执行模式": import_mode})
     cucumber_dict.update({"机器 IP": ip_list})
@@ -172,8 +178,17 @@ def push_result(ip_list, build_user_id, build_url, webhook, import_mode):
     cucumber_dict.update({"环境类型": env_type})
     cucumber_dict.update({'sdi 版本': sdi_version})
     cucumber_dict.update({'horizon 版本': horizon_version})
+    if idm_engine_type == 'default':
+        id2_engine_name = "[兼容模式] "
+        id3_engine_name = "[ID3 模式] "
+        cucumber_dict.update({"IDM 引擎": "兼容模式引擎 & ID3引擎"})
+    else:
+        id2_engine_name = "[高性能尽可能关联 2 id] "
+        id3_engine_name = "[高性能 ID3] "
+        cucumber_dict.update({"IDM 引擎": "高性能引擎"})
+
     for case_qps in id2_project_qps_list:
-        key = "[兼容模式] " + str(case_qps['title'])
+        key = id2_engine_name + str(case_qps['title'])
         if import_mode != "chain":
             value = " avg_qps=" + str(int(case_qps['avg_qps']))
         elif is_cluster:
@@ -188,7 +203,7 @@ def push_result(ip_list, build_user_id, build_url, webhook, import_mode):
         cucumber_dict.update({key: value})
 
     for case_qps in id3_project_qps_list:
-        key = "[id3模式] " + str(case_qps['title'])
+        key = id3_engine_name + str(case_qps['title'])
         if import_mode != "chain":
             value = " avg_qps=" + str(int(case_qps['avg_qps']))
         elif is_cluster:
@@ -253,6 +268,9 @@ if __name__ == "__main__":
     id3_mode_data_count = args.id3_mode_data_count
     mock_idm_data_count = args.mock_idm_data_count
     idm_engine_type = args.idm_engine_type
+    id2_mode_project_name = args.id2_mode_project_name + "_" + idm_engine_type
+    id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type
+    mock_idm_project_name = args.mock_idm_project_name + "_" + idm_engine_type
     # 1、对 skv 内存进行调优
     optimize_skv(exec_ip, skip_init)
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
@@ -294,10 +312,9 @@ if __name__ == "__main__":
                 clear_log(exec_ip)
                 test_case.do_test(servers, id2_mode_data_count, list_count)
                 start_module(exec_ip, "integrator", "scheduler")
-                qps_detail = test_case.collect_qps(exec_ip, id2_mode_data_count)
                 id2_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
 
-    # 5、对 id3_mode_cases 项目进行测试
+    # 5、对 id3 项目进行测试
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
         project_name = args.id3_mode_project_name
@@ -364,7 +381,8 @@ if __name__ == "__main__":
 
     # 7、推送结果
     if args.result_delivery_method == 'email':
-        send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list, mock_idm_case_qps_list,
+        send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
+                              mock_idm_case_qps_list,
                               'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', args.receiver_emails)
     else:
-        push_result(ip_list, args.build_user_id, args.build_url, args.webhook, import_mode)
+        push_result(ip_list, idm_engine_type, args.build_user_id, args.build_url, args.webhook, import_mode)

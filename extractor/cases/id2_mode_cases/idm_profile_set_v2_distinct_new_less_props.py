@@ -1,4 +1,3 @@
-import json
 import os
 import random
 import sys
@@ -8,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 sys.path.append('../../..')
-from idm_fast_mode.cases.test_case import TestCase
-from idm_fast_mode.common_tools import collect_sdi_qps, import_api
+from extractor.cases.test_case import TestCase
+from extractor.tools.common_tools import collect_extractor_qps, import_api
 
 false = False
 true = True
@@ -29,7 +28,7 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
                 "$lib_method": "code"
             },
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -51,14 +50,14 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
         else:
             print("文件 {} 不存在".format(self.file_name))
 
-        # 单个并发最多导 200w 数据
-        if count % 2000000 == 0:
-            concurrent_num = int(count / 2000000)
+        # 单个并发最多导 100w 数据
+        if count % 1000000 == 0:
+            concurrent_num = int(count / 1000000)
         else:
-            concurrent_num = int(count / 2000000) + 1
+            concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
-        with ThreadPoolExecutor(max_workers=min(concurrent_num, 10)) as executor:
+        with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
             for i in range(concurrent_num):
                 future = executor.submit(self.run_make_records, servers, avg_count, list_count, i)
                 futures.append(future)
@@ -86,6 +85,7 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
             device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + \
                         str(random.randint(1000000, 9999999)) + str(concurrent_index)
             profile_set_json['distinct_id'] = device_id
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]
@@ -97,6 +97,6 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
         return profile_set_list
 
     def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set(匿名新用户 单个属性 version=2.0)"
+        qps_detail = collect_extractor_qps(exec_ip, data_count)
+        qps_detail['title'] = "profile_set (匿名新用户, 单个属性 version=2.0)"
         return qps_detail

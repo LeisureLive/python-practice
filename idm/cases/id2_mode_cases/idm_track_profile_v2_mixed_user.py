@@ -26,7 +26,7 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
         self.profile_set_v2_more = {
             "distinct_id": "",
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -160,7 +160,8 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
         self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4",
+                                        "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -222,8 +223,7 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
                     index = random.randint(0, len(already_identities) - 1)
                     distinct_id = already_identities[index]['distinct_id']
                 profile_set_json['distinct_id'] = distinct_id
-                profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
-                    random.randint(1000000, 9999999))
+                profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
                 profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
                 profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                     random.randint(0, len(first_visit_source_list) - 1)]
@@ -248,7 +248,7 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
                 track_json.update({"distinct_id": distinct_id})
                 track_json.update({"time": int(time.time() * 1000) + num})
                 track_json["properties"].update({"$device_id": distinct_id})
-                track_json["properties"].update({"num": str(num)})
+                track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
                 _flush_time = str(random.randint(1000000, 9999999)) + str(num)
                 track_json["properties"].update({"case_id": _flush_time})
                 track_json["properties"].update({"case_text": "一二三四五" + str(num)})

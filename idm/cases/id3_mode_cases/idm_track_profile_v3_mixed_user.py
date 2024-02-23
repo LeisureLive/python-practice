@@ -34,7 +34,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                 "$identity_taobao_ouid": ""
             },
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -170,7 +170,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                          "identities": {"$identity_idfv": ""},
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -184,7 +184,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 4
+        count = count * 3
         print("开始导入新老用户 profile + track 混合数据(version=3.0), 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -259,8 +259,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                 profile_set_json['identities']['$identity_cookie_id'] = cookie
                 profile_set_json['identities']['$identity_email'] = email
                 profile_set_json['identities']['$identity_taobao_ouid'] = taobao
-                profile_set_json['properties']['account'] = 'account_' + str(int(time.time() * 1000000)) + str(
-                    random.randint(1000000, 9999999))
+                profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
                 profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
                 profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                     random.randint(0, len(first_visit_source_list) - 1)]
@@ -309,6 +308,7 @@ class IdmTrackProfileV3MixedUserCase(TestCase):
                 track_json["identities"].update({"$identity_taobao_ouid": taobao})
                 _flush_time = str(random.randint(1000000, 9999999)) + str(num)
                 # NM_track.update({"_flush_time":int(_flush_time)})
+                track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
                 track_json["properties"].update({"case_id": _flush_time})
                 track_json["properties"].update(
                     {"case_text": "一二三四五" + str(time.time() * 1000)})

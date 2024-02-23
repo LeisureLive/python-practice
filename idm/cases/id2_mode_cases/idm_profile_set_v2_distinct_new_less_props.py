@@ -1,4 +1,3 @@
-import json
 import os
 import random
 import sys
@@ -29,7 +28,7 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
                 "$lib_method": "code"
             },
             "properties": {
-                "account": "123123123",
+                "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
                 "gender": "男",
@@ -86,6 +85,7 @@ class IdmProfileSetV2DistinctNewUserLessPropsCase(TestCase):
             device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + \
                         str(random.randint(1000000, 9999999)) + str(concurrent_index)
             profile_set_json['distinct_id'] = device_id
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
             profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
                 random.randint(0, len(first_visit_source_list) - 1)]
