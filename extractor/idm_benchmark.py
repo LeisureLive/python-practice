@@ -236,7 +236,7 @@ if __name__ == "__main__":
             # IdmProfileSetV2DistinctNewUserLessPropsCase(args.build_user_id, identification),
             IdmProfileSetV2DistinctNewUserMorePropsCase(args.build_user_id, identification),
             IdmProfileSetV2DistinctOldUserMorePropsCase(args.build_user_id, identification),
-            # 以下两个 case 性能较低, 固定最多只导100w 数据
+            # 以下两个 case 性能较低, 固定最多只导 80w 数据
             IdmProfileSetV2DistinctNewLoginUserMorePropsCase(args.build_user_id, identification),
             IdmProfileSetV2DistinctOldLoginUserMorePropsCase(args.build_user_id, identification),
             IdmTrackV2DistinctNewUserCase(args.build_user_id, identification),

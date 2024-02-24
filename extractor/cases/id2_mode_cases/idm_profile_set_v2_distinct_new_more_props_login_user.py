@@ -174,7 +174,7 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
             os.remove(self.file_name)
         else:
             print("文件 {} 不存在, 记录用户信息到此文件".format(self.file_name))
-        count = max(count, 1000000)
+        count = min(count, 800000)
         # 单个并发最多导 50w 数据
         if count % 500000 == 0:
             concurrent_num = int(count / 500000)
