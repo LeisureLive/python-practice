@@ -201,6 +201,7 @@ def import_api(gzipType, dataType, jsonString, server):
     s.keep_alive = False
     response = requests.post(server, data=payload, headers=headers)
 
+
 def exec_importer(ip, project, file, import_mode):
     remote_file_path = "/sensorsdata/main/runtime/idm-case/"
     exec_command(ip, f"su - sa_cluster -c 'rm -r {remote_file_path}'")
@@ -226,6 +227,7 @@ def exec_importer(ip, project, file, import_mode):
     exec_command(ip, 'su - sa_cluster -c "{}"'.format(cmd))
     return time.time() - start_time
 
+
 def split_list(input_list, batch_size):
     """
     将列表切分为指定批次大小的多个子列表
@@ -238,6 +240,7 @@ def split_list(input_list, batch_size):
     list of lists: 切分后的子列表
     """
     return [input_list[i:i + batch_size] for i in range(0, len(input_list), batch_size)]
+
 
 def dealwith(gzipType, jsonString):
     data = json.dumps(jsonString, ensure_ascii=False)
@@ -257,6 +260,8 @@ def collect_extractor_qps(ip, data_count):
         time.sleep(20)
         print("等待 extractor 数据处理完成, 已等待{}s".format(i * 20))
         i += 1
+        if i * 20 == 1200:
+            pause_module(ip, 'edge', 'edge')
     print("extractor 数据处理完成, 开始统计qps")
     qps = check_extractor_qps(ip, 30, data_count)
     return qps

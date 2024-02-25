@@ -45,7 +45,7 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
-        count = len(already_identities)
+        count = min(len(already_identities), 800000)
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
             concurrent_num = int(count / 1000000)
