@@ -65,7 +65,7 @@ def open_idm_optimize_trigger(ip, skip_init):
                  'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
     if check_is_cluster(ip):
         exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 4096 --unstable" ')
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
         exec_command(ip,
                      'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
     else:
@@ -252,7 +252,8 @@ if __name__ == "__main__":
     parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
     parser.add_argument('-import_mode', type=str, default="chain",
                         help='导入模式：chain / hdfs_importer / importer / importer_v2')
-    parser.add_argument('-result_delivery_method', type=str, default="push", help='结果通知方式: push(微信机器人推送)/email(邮件通知)')
+    parser.add_argument('-result_delivery_method', type=str, default="push",
+                        help='结果通知方式: push(微信机器人推送)/email(邮件通知), 多个通知方式之间使用 ; 进行分隔')
     parser.add_argument('-receiver_emails', type=str, help='邮件通知接收人地址, 多个邮箱地址使用 ; 进行分隔')
     args = parser.parse_args()
 
@@ -380,9 +381,9 @@ if __name__ == "__main__":
         close_mock_idm(exec_ip)
 
     # 7、推送结果
-    if args.result_delivery_method == 'email':
+    if args.result_delivery_method.__contains__('email'):
         send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
                               mock_idm_case_qps_list,
                               'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', args.receiver_emails)
-    else:
+    elif args.result_delivery_method.__contains__('push'):
         push_result(ip_list, idm_engine_type, args.build_user_id, args.build_url, args.webhook, import_mode)

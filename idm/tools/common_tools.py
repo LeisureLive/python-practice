@@ -165,17 +165,14 @@ def extract_ip_from_line(line):
 
 def restart_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "aradmin restart -p {} -m {}" '.format(product, module))
-    exec_command(ip, 'su - sa_cluster -c "spadmin restart -p {} -m {}" '.format(product, module))
 
 
 def pause_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "aradmin pause -p {} -m {} -d 86400" '.format(product, module))
-    exec_command(ip, 'su - sa_cluster -c "spadmin pause -p {} -m {}" '.format(product, module))
 
 
 def start_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "aradmin start -p {} -m {}" '.format(product, module))
-    exec_command(ip, 'su - sa_cluster -c "spadmin start -p {} -m {}" '.format(product, module))
 
 
 def check_sdi_exists_latency(ip):

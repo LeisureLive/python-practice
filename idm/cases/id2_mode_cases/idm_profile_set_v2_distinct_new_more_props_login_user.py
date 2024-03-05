@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import random
@@ -174,11 +173,11 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
             os.remove(self.file_name)
         else:
             print("文件 {} 不存在, 记录用户信息到此文件".format(self.file_name))
-        # 单个并发最多导 100w 数据
-        if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+        # 单个并发最多导 50w 数据
+        if count % 500000 == 0:
+            concurrent_num = int(count / 500000)
         else:
-            concurrent_num = int(count / 1000000) + 1
+            concurrent_num = int(count / 500000) + 1
         avg_count = int(count / concurrent_num)
         futures = []
         with ThreadPoolExecutor(max_workers=concurrent_num) as executor:
@@ -192,10 +191,13 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
 
     def run_make_records(self, servers, count, list_count, concurrent_index):
         print("导入 profile_set(登录新用户, 125 个属性 version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
+        start = int(time.time())
         cnt = int(count / list_count)
         for i in range(cnt):
             test_data = self.make_profile_set_v2_more(list_count)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+        print("导入 profile_set(登录新用户, 125 个属性 version=2.0) 数据, 并发序号={}, 导入量={}, cost={}ms"
+              .format(concurrent_index, count, int(time.time()) - start))
         return count
 
     def make_profile_set_v2_more(self, count):
@@ -205,12 +207,15 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
         first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
         citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
         careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
+        birthdays = ['2001-01-01', '1999-09-09', '1998-08-08', '1997-07-07', '1996-06-06', '1995-05-05', '1994-04-04',
+                     '1993-03-03', '1992-02-02', '1991-01-01']
         for i in range(count):
             profile_set_json = deepcopy(self.profile_set_v2_more)
             profile_set_identity_json = deepcopy(self.profile_set_v2_identities)
-            device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
-                random.randint(1000000, 9999999))
-            login_id = 'user_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999))
+            random_num = random.randint(1000000000, 9999999999)
+            current_time = time.time()
+            device_id = str(uuid.uuid4()) + str(int(current_time * 1000000)) + '_' + str(random_num)
+            login_id = 'user_' + str(int(current_time * 1000000)) + '_' + str(random_num)
             profile_set_identity_json['anonymous_id'] = device_id
             profile_set_identity_json['login_id'] = login_id
             profile_set_identity_json['distinct_id'] = login_id
@@ -219,18 +224,14 @@ class IdmProfileSetV2DistinctNewLoginUserMorePropsCase(TestCase):
             profile_set_json['anonymous_id'] = device_id
             profile_set_json['login_id'] = login_id
             profile_set_json['distinct_id'] = login_id
-            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
-            profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random_num % 255 + 1)
+            profile_set_json['properties']['gender'] = genders[random_num % len(genders)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
-                random.randint(0, len(first_visit_source_list) - 1)]
-            profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
-            profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),
-                                                                       random.randint(1, 12),
-                                                                       random.randint(1, 28)).strftime('%Y-%m-%d')
-            phone_prefix = random.choice(['133', '149', '153', '173', '177', '180', '181', '189', '191', '199'])
-            phone_suffix = ''.join(random.choice('0123456789') for _ in range(8))
-            profile_set_json['properties']['phone_number'] = phone_prefix + phone_suffix
-            profile_set_json['properties']['career'] = careers[random.randint(0, len(careers) - 1)]
+                random_num % len(first_visit_source_list)]
+            profile_set_json['properties']['city'] = citys[random_num % len(citys)]
+            profile_set_json['properties']['birthday'] = birthdays[random_num % len(birthdays)]
+            profile_set_json['properties']['phone_number'] = str(random_num)
+            profile_set_json['properties']['career'] = careers[random_num % len(careers)]
 
             profile_set_list.append(profile_set_json)
         with open(self.file_name, 'a') as f:

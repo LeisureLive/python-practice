@@ -24,7 +24,8 @@ class IdmTrack3DistinctNewUserCase(TestCase):
                          "identities": {"$identity_idfv": ""},
                          "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
-                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
+                         "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4",
+                                        "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
                                         "$model": "x86_64", "$screen_width": 414,
                                         "$app_id": "cn.sensorsdata.SensorsData",
@@ -58,31 +59,30 @@ class IdmTrack3DistinctNewUserCase(TestCase):
     def run_make_records(self, servers, count, list_count, concurrent_index):
         print("导入 新用户 track(version=3.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / list_count)
+        start = int(time.time())
         for i in range(cnt):
             test_data = self.make_track_v3_new_user(list_count, concurrent_index)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+        print("导入 新用户 track(version=3.0) 数据, 并发序号={}, 导入量={}, cost={}ms"
+              .format(concurrent_index, count, int(time.time()) - start))
         return count
 
     def make_track_v3_new_user(self, count, concurrent_index):
         track_v3_list = []
         for num in range(count):
             track_json = deepcopy(self.track_v3)
-            nm_device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
-                random.randint(1000000, 9999999)) + str(concurrent_index)
-            login_id = 'user_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
+            random_num = random.randint(1000000000, 9999999999)
+            current_time = time.time()
+            nm_device_id = str(uuid.uuid4()) + str(int(current_time * 1000000)) + '_' + str(random_num) + str(
                 concurrent_index)
-            idfv = 'idfv_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            mobile = 'mobile_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            cookie = 'cookie' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            email = 'email_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            taobao = 'taobao_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
+            login_id = 'user_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            idfv = 'idfv_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            mobile = 'mobile_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            cookie = 'cookie' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            email = 'email_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            taobao = 'taobao_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
             track_json.update({"distinct_id": nm_device_id})
-            track_json.update({"time": int(time.time() * 1000) + num})
+            track_json.update({"time": int(current_time * 1000) + num})
             track_json["properties"].update({"$device_id": nm_device_id})
             track_json["identities"].update({"$identity_login_id": login_id})
             track_json["identities"].update({"$identity_idfv": idfv})
@@ -90,8 +90,8 @@ class IdmTrack3DistinctNewUserCase(TestCase):
             track_json["identities"].update({"$identity_cookie_id": cookie})
             track_json["identities"].update({"$identity_email": email})
             track_json["identities"].update({"$identity_taobao_ouid": taobao})
-            _flush_time = str(random.randint(1000000, 9999999)) + str(num)
-            track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
+            _flush_time = str(random_num) + str(num)
+            track_json['properties'].update({"$ip": "10.129.29." + str(random_num % 255 + 1)})
             track_json["properties"].update({"case_id": _flush_time})
             track_json["properties"].update({"case_text": "一二三四五" + str(num)})
             track_json["properties"].update({"string_field": "一二三四五六七八九十" + str(num)})

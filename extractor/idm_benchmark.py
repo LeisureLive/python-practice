@@ -46,11 +46,16 @@ def open_idm_optimize_trigger(ip, skip_init):
                  'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n mem_limit -v "8192Mi"" ')
     exec_command(ip,
                  'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n jvm_xmx -v "8192Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
 
     exec_command(ip,
-                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n mem_limit -v "8192Mi"" ')
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n mem_limit -v "4096Mi"" ')
     exec_command(ip,
-                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n jvm_xmx -v "8192Mi"" ')
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n jvm_xmx -v "4096Mi"" ')
+
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
 
     restart_module(ip, "sdf", "id_mapping_skv_proxy")
     restart_module(ip, "sdf", "extractor")

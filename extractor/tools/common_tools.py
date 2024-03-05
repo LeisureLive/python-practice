@@ -119,11 +119,11 @@ def check_extractor_exists_latency(ip):
         data = json.loads(result)
         total_latency_count_value = data.get("total_latency_count", None)
         if total_latency_count_value is not None and total_latency_count_value == 0:
-            return True
-        else:
             return False
+        else:
+            return True
     else:
-        return False
+        return True
 
 
 def waiting_extractor_consume_latency(ip):
@@ -260,7 +260,7 @@ def collect_extractor_qps(ip, data_count):
         time.sleep(20)
         print("等待 extractor 数据处理完成, 已等待{}s".format(i * 20))
         i += 1
-        if i * 20 == 1200:
+        if i * 20 == 360:
             pause_module(ip, 'edge', 'edge')
     print("extractor 数据处理完成, 开始统计qps")
     qps = check_extractor_qps(ip, 30, data_count)
@@ -269,7 +269,7 @@ def collect_extractor_qps(ip, data_count):
 
 def check_extractor_qps(ip, line_count, data_count):
     exec_command(ip,
-                 'su - sa_cluster -c "grep speed /sensorsdata/main/logs/sdf/extractor/extractor.log | tail -n 80  > /home/sa_cluster/log_data.log"')
+                 'su - sa_cluster -c "grep speed /sensorsdata/main/logs/sdf/extractor/extractor.log  > /home/sa_cluster/log_data.log"')
 
     time.sleep(5)
     identification = time.time()

@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import random
@@ -20,7 +19,8 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
 
     def __init__(self, build_user, identification):
         self.file_name = "profile_set_v3_more_{}_{}.json".format(build_user, identification)
-        self.import_file_name = "IdmProfileSetV3DistinctNewUserMorePropsCase_{}_{}_importer.json".format(build_user, identification)
+        self.import_file_name = "IdmProfileSetV3DistinctNewUserMorePropsCase_{}_{}_importer.json".format(build_user,
+                                                                                                         identification)
         self.cost = 0
         super().__init__()
         self.profile_set_v3_more = {
@@ -205,9 +205,12 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
     def run_make_records(self, servers, count, list_count, concurrent_index):
         print("导入 profile_set(125 个属性 version=3.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / list_count)
+        start = int(time.time())
         for i in range(cnt):
             test_data = self.make_profile_set_v3_more(list_count, concurrent_index)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
+        print("导入 profile_set(125 个属性 version=3.0) 数据, 并发序号={}, 导入量={}, cost={}ms"
+              .format(concurrent_index, count, int(time.time()) - start))
         return count
 
     def make_profile_set_v3_more(self, count, concurrent_index):
@@ -217,23 +220,21 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
         first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
         citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
         careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
+        birthdays = ['2001-01-01', '1999-09-09', '1998-08-08', '1997-07-07', '1996-06-06', '1995-05-05', '1994-04-04',
+                     '1993-03-03', '1992-02-02', '1991-01-01']
         for i in range(count):
             profile_set_json = deepcopy(self.profile_set_v3_more)
+            random_num = random.randint(1000000000, 9999999999)
+            current_time = time.time()
             profile_set_identity_json = deepcopy(self.profile_set_v3_identities)
-            device_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
-                random.randint(1000000, 9999999)) + str(concurrent_index)
-            login_id = 'user_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
+            device_id = str(uuid.uuid4()) + str(int(current_time * 1000000)) + '_' + str(random_num) + str(
                 concurrent_index)
-            idfv = 'idfv_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            mobile = 'mobile_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            cookie = 'cookie' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            email = 'email_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
-            taobao = 'taobao_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999)) + str(
-                concurrent_index)
+            login_id = 'user_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            idfv = 'idfv_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            mobile = 'mobile_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            cookie = 'cookie' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            email = 'email_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
+            taobao = 'taobao_' + str(int(current_time * 1000000)) + '_' + str(random_num) + str(concurrent_index)
             profile_set_identity_json['distinct_id'] = device_id
             profile_set_identity_json['identities']['$identity_login_id'] = login_id
             profile_set_identity_json['identities']['$identity_idfv'] = idfv
@@ -250,18 +251,14 @@ class IdmProfileSetV3DistinctNewUserMorePropsCase(TestCase):
             profile_set_json['identities']['$identity_cookie_id'] = cookie
             profile_set_json['identities']['$identity_email'] = email
             profile_set_json['identities']['$identity_taobao_ouid'] = taobao
-            profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
-            profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
+            profile_set_json['properties']['$ip'] = "10.129.29." + str(random_num % 255 + 1)
+            profile_set_json['properties']['gender'] = genders[random_num % len(genders)]
             profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
-                random.randint(0, len(first_visit_source_list) - 1)]
-            profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
-            profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),
-                                                                       random.randint(1, 12),
-                                                                       random.randint(1, 28)).strftime('%Y-%m-%d')
-            phone_prefix = random.choice(['133', '149', '153', '173', '177', '180', '181', '189', '191', '199'])
-            phone_suffix = ''.join(random.choice('0123456789') for _ in range(8))
-            profile_set_json['properties']['phone_number'] = phone_prefix + phone_suffix
-            profile_set_json['properties']['career'] = careers[random.randint(0, len(careers) - 1)]
+                random_num % len(first_visit_source_list)]
+            profile_set_json['properties']['city'] = citys[random_num % len(citys)]
+            profile_set_json['properties']['birthday'] = birthdays[random_num % len(birthdays)]
+            profile_set_json['properties']['phone_number'] = str(random_num)
+            profile_set_json['properties']['career'] = careers[random_num % len(careers)]
 
             profile_set_list.append(profile_set_json)
         with open(self.file_name, 'a') as f:

@@ -68,10 +68,12 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
         print("导入 匿名用户关联同一登录id 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / list_count)
         base_index = concurrent_index * count
+        start = int(time.time())
         for i in range(cnt):
             test_data = self.make_track_login_multi_user(already_identities, base_index, i, list_count)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
-        print("导入 匿名用户关联同一登录id track 数据(version=2.0) 完成")
+        print("导入 匿名用户关联同一登录id 数据, 并发序号={}, 导入量={}, cost={}ms"
+              .format(concurrent_index, count, int(time.time()) - start))
         return count
 
     def make_track_login_multi_user(self, already_identities, base_index, batch_index, list_count):
@@ -84,10 +86,12 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
             identity_json1 = deepcopy(self.track_v2_identities)
             identity_json2 = deepcopy(self.track_v2_identities)
 
+            random_num = random.randint(1000000000, 9999999999)
+            current_time = time.time()
             index = base_index + batch_index * list_count + num * 2
             device_id1 = already_identities[index]['distinct_id']
             device_id2 = already_identities[index + 1]['distinct_id']
-            login_id = 'user_' + str(int(time.time() * 1000000)) + '_' + str(random.randint(1000000, 9999999))
+            login_id = 'user_' + str(int(current_time * 1000000)) + '_' + str(random_num)
 
             identity_json1['distinct_id'] = login_id
             identity_json1['login_id'] = login_id
@@ -103,24 +107,22 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
             track_json1.update({"login_id": login_id})
             track_json1.update({"anonymous_id": device_id1})
             track_json1["properties"].update({"$device_id": device_id1})
-            track_json1['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
-            _flush_time = str(random.randint(1000000, 9999999)) + str(num)
+            _flush_time = str(random_num) + str(num)
+            track_json1['properties'].update({"$ip": "10.129.29." + str(random_num % 255 + 1)})
             track_json1["properties"].update({"case_id": _flush_time})
             track_json1["properties"].update({"case_text": "一二三四五" + str(num)})
-            track_json1["properties"].update({"order": str(num)})
-            track_json1.update({"_track_id": random.randint(1000000, 9999999999)})
+            track_json1["properties"].update({"string_field": "一二三四五六七八九十" + str(num)})
             track_v2_list.append(track_json1)
 
             track_json2.update({"distinct_id": login_id})
             track_json2.update({"login_id": login_id})
             track_json2.update({"anonymous_id": device_id2})
             track_json2["properties"].update({"$device_id": device_id2})
-            track_json2['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
-            _flush_time = str(random.randint(1000000, 9999999)) + str(num)
+            _flush_time = str(random_num) + str(num)
+            track_json2['properties'].update({"$ip": "10.129.29." + str(random_num % 255 + 1)})
             track_json2["properties"].update({"case_id": _flush_time})
             track_json2["properties"].update({"case_text": "一二三四五" + str(num)})
-            track_json2["properties"].update({"order": str(num)})
-            track_json2.update({"_track_id": random.randint(1000000, 9999999999)})
+            track_json2["properties"].update({"string_field": "一二三四五六七八九十" + str(num)})
             track_v2_list.append(track_json2)
         with open(self.output_file_name, 'a') as f:
             for item in identity_list:

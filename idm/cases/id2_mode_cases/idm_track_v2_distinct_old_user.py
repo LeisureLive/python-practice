@@ -34,7 +34,6 @@ class IdmTrackV2DistinctOldUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 3
         print("开始导入 track(匿名老用户, version=2.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -60,27 +59,31 @@ class IdmTrackV2DistinctOldUserCase(TestCase):
     def run_make_records(self, servers, already_identities, count, list_count, concurrent_index):
         print("导入 track(匿名老用户, version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / list_count)
+        start = int(time.time())
         for i in range(cnt):
             test_data = self.make_track_v2_old_user(list_count, already_identities)
             import_api(1, 1, test_data, servers[random.randint(0, len(servers) - 1)])
-        print("导入 track(匿名老用户, version=2.0) 数据完成")
+        print("导入 track(匿名老用户, version=2.0) 数据, 并发序号={}, 导入量={}, cost={}ms"
+              .format(concurrent_index, count, int(time.time()) - start))
         return count
 
     def make_track_v2_old_user(self, count, already_identities):
         track_v2_list = []
         for num in range(count):
             track_json = deepcopy(self.track_v2)
-            index = random.randint(0, len(already_identities) - 1)
+            random_num = random.randint(1000000000, 9999999999)
+            current_time = time.time()
+            index = random_num % len(already_identities)
             distinct_id = already_identities[index]['distinct_id']
             track_json.update({"distinct_id": distinct_id})
-            track_json.update({"time": int(time.time() * 1000) + num})
+            track_json.update({"time": int(current_time * 1000) + num})
             track_json["properties"].update({"$device_id": distinct_id})
             track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
-            _flush_time = str(random.randint(1000000, 9999999)) + str(num)
+            _flush_time = str(random_num) + str(num)
+            track_json['properties'].update({"$ip": "10.129.29." + str(random_num % 255 + 1)})
             track_json["properties"].update({"case_id": _flush_time})
             track_json["properties"].update({"case_text": "一二三四五" + str(num)})
-            track_json["properties"].update({"order": str(num)})
-            track_json.update({"_track_id": random.randint(1000000, 9999999999)})
+            track_json["properties"].update({"string_field": "一二三四五六七八九十" + str(num)})
             track_v2_list.append(track_json)
         return track_v2_list
 

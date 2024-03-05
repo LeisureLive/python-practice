@@ -1,4 +1,3 @@
-import datetime
 import gc
 import json
 import random
@@ -170,7 +169,6 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        count = count * 3
         print("开始导入匿名新老用户 profile + track 混合数据(version=2.0), 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -196,11 +194,14 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
     def run_make_records(self, servers, already_identities, count, list_count, concurrent_index):
         print("导入匿名新老用户 profile + track 混合数据(version=2.0) 数据, 并发序号={}, 导入量={}".format(concurrent_index, count))
         cnt = int(count / 1000)
+        start = int(time.time())
         for i in range(cnt):
             test_data = self.make_track_profile_mixed_user(already_identities, concurrent_index, 1000)
             result_batched = split_list(test_data, 100)
             for batch in result_batched:
                 import_api(1, 1, batch, servers[random.randint(0, len(servers) - 1)])
+        print("导入匿名新老用户 profile + track 混合数据(version=2.0) 数据, 并发序号={}, 导入量={}, cost={}ms"
+              .format(concurrent_index, count, int(time.time()) - start))
         return count
 
     def make_track_profile_mixed_user(self, already_identities, concurrent_index, count):
@@ -208,52 +209,51 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
         num = 1
         profile_count = 0
         track_count = 0
+        genders = ['男', '女', '未填写']
+        first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
+        citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
+        careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
+        birthdays = ['2001-01-01', '1999-09-09', '1998-08-08', '1997-07-07', '1996-06-06', '1995-05-05',
+                     '1994-04-04', '1993-03-03', '1992-02-02', '1991-01-01']
         while num <= count:
+            random_num = random.randint(1000000000, 9999999999)
+            current_time = time.time()
             if num % 20 == 0:
                 profile_count += 1
                 profile_set_json = deepcopy(self.profile_set_v2_more)
-                genders = ['男', '女', '未填写']
-                first_visit_source_list = ['微信', 'QQ', '微博', '小红书']
-                citys = ['上海', '深圳', '成都', '武汉', '杭州', '北京', '广州', '福州', '天津']
-                careers = ['司机', '学生', '白领', '教师', '外卖员', '公务员', '无业']
                 if profile_count % 50 == 0:
-                    distinct_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
-                        random.randint(1000000, 9999999)) + str(concurrent_index)
+                    distinct_id = str(uuid.uuid4()) + str(int(current_time * 1000000)) + '_' + str(random_num) + str(
+                        concurrent_index)
                 else:
-                    index = random.randint(0, len(already_identities) - 1)
+                    index = random_num % len(already_identities)
                     distinct_id = already_identities[index]['distinct_id']
                 profile_set_json['distinct_id'] = distinct_id
-                profile_set_json['properties']['$ip'] = "10.129.29." + str(random.randint(1, 255))
-                profile_set_json['properties']['gender'] = genders[random.randint(0, len(genders) - 1)]
+                profile_set_json['properties']['$ip'] = "10.129.29." + str(random_num % 255 + 1)
+                profile_set_json['properties']['gender'] = genders[random_num % len(genders)]
                 profile_set_json['properties']['first_visit_source'] = first_visit_source_list[
-                    random.randint(0, len(first_visit_source_list) - 1)]
-                profile_set_json['properties']['city'] = citys[random.randint(0, len(citys) - 1)]
-                profile_set_json['properties']['birthday'] = datetime.date(random.randint(1900, 2021),
-                                                                           random.randint(1, 12),
-                                                                           random.randint(1, 28)).strftime('%Y-%m-%d')
-                phone_prefix = random.choice(['133', '149', '153', '173', '177', '180', '181', '189', '191', '199'])
-                phone_suffix = ''.join(random.choice('0123456789') for _ in range(8))
-                profile_set_json['properties']['phone_number'] = phone_prefix + phone_suffix
-                profile_set_json['properties']['career'] = careers[random.randint(0, len(careers) - 1)]
+                    random_num % len(first_visit_source_list)]
+                profile_set_json['properties']['city'] = citys[random_num % len(citys)]
+                profile_set_json['properties']['birthday'] = birthdays[random_num % len(birthdays)]
+                profile_set_json['properties']['phone_number'] = str(random_num)
+                profile_set_json['properties']['career'] = careers[random_num % len(careers)]
                 jsonStringV2.append(deepcopy(profile_set_json))
             else:
                 track_count += 1
                 track_json = deepcopy(self.track_v2)
                 if track_count % 50 == 0:
-                    distinct_id = str(uuid.uuid4()) + str(int(time.time() * 1000000)) + '_' + str(
-                        random.randint(1000000, 9999999)) + str(concurrent_index)
+                    distinct_id = str(uuid.uuid4()) + str(int(current_time * 1000000)) + '_' + str(random_num) + str(
+                        concurrent_index)
                 else:
-                    index = random.randint(0, len(already_identities) - 1)
+                    index = random_num % len(already_identities)
                     distinct_id = already_identities[index]['distinct_id']
                 track_json.update({"distinct_id": distinct_id})
-                track_json.update({"time": int(time.time() * 1000) + num})
+                track_json.update({"time": int(current_time * 1000) + num})
                 track_json["properties"].update({"$device_id": distinct_id})
-                track_json['properties'].update({"$ip": "10.129.29." + str(random.randint(1, 255))})
-                _flush_time = str(random.randint(1000000, 9999999)) + str(num)
+                _flush_time = str(random_num) + str(num)
+                track_json['properties'].update({"$ip": "10.129.29." + str(random_num % 255 + 1)})
                 track_json["properties"].update({"case_id": _flush_time})
                 track_json["properties"].update({"case_text": "一二三四五" + str(num)})
-                track_json["properties"].update({"order": str(num)})
-                track_json.update({"_track_id": random.randint(1000000, 9999999999)})
+                track_json["properties"].update({"string_field": "一二三四五六七八九十" + str(num)})
                 jsonStringV2.append(deepcopy(track_json))
             num += 1
         return jsonStringV2
