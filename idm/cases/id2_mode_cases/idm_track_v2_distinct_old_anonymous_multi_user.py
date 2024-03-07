@@ -34,7 +34,7 @@ class IdmTrackV2DistinctAnonymousMultiUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
-        print("开始导入 登录老用户匿名事件 version=2.0 数据, 数据量={}".format(count))
+        print("开始导入 匿名事件 version=2.0 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]

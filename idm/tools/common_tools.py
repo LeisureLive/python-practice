@@ -1,4 +1,5 @@
 import base64
+import datetime
 import gzip
 import json
 import os
@@ -55,6 +56,19 @@ def get_horizon_version(ip):
         print("未找到匹配的信息")
         return 'unknown'
 
+def get_sdf_version(ip):
+    versions = exec_command(ip, "su - sa_cluster -c 'aradmin version' ")
+    matches = re.findall(r"│\s+sdf\s+│\s+(\d+\.\d+\.\d+\.\d+)\s+│\s+(\w+)\s+│", versions)
+
+    if matches:
+        version, level = matches[0]
+        print(f"SDF Version: {version}")
+        print(f"SDF Level: {level}")
+        return version + ' ' + level
+    else:
+        print("未找到匹配的信息")
+        return 'unknown'
+
 
 def close_mock_idm(ip):
     exec_command(ip,
@@ -66,8 +80,27 @@ def open_idm_mock(ip):
                  "su - sa_cluster -c 'sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_mock -v true --unstable ' ")
 
 
+def exec_command_and_check(ip, cmd):
+    print(
+        f'exec_command_and_check. [id={ip}, cmd={cmd}, start_time={datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]')
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(hostname=ip, username=username, password=get_pwd(), timeout=120)
+    stdin, stdout, stderr = ssh.exec_command(cmd)
+    out = stdout.read()
+    err = stderr.read()
+    return_code = stdout.channel.recv_exit_status()
+    if return_code != 0:
+        raise RuntimeError(f"exec_command error: {err.decode()}. cmd: {cmd}")
+    result = out
+    if not result:
+        result = stderr.read()
+    print(result.decode())
+    return result.decode()
+
+
 def exec_command(ip, cmd):
-    print('cmd:' + cmd)
+    print(f'exec_command. [id={ip}, cmd={cmd}, start_time={datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]')
     retries = 1
     ssh = paramiko.SSHClient()
     while retries <= 3:
@@ -307,6 +340,80 @@ def check_sdi_qps(ip, line_count, data_count):
 
     for line in log_data:
         match = re.search(r'speed=(\d+)', line)
+        if match:
+            speed_value = match.group(1)
+            speed_data_list.append(int(speed_value))
+    print("original data list:" + str(speed_data_list))
+    # 处理所有的 qps 数据，去除其中无效的(为0的、头尾的)
+    speed_data_list_fix = []
+    for i in range(len(speed_data_list)):
+        if speed_data_list[i] > 10 and speed_data_list[i] < data_count:
+            speed_data_list_fix.append(speed_data_list[i])
+    if len(speed_data_list_fix) >= 4:
+        remove_count = len(speed_data_list_fix) / 4
+        i = 1
+        while i <= remove_count:
+            speed_data_list_fix.pop()
+            speed_data_list_fix.pop(0)
+            i += 1
+    print("last data list:" + str(speed_data_list_fix))
+
+    if len(speed_data_list_fix) > 0:
+        avg_qps = round(sum(speed_data_list_fix) / len(speed_data_list_fix))
+        max_qps = round(max(speed_data_list_fix))
+        min_qps = round(min(speed_data_list_fix))
+    else:
+        avg_qps = 0
+        max_qps = 0
+        min_qps = 0
+    qps_detail = {}
+    print("max_qps：" + str(max_qps))
+    print("min_qps：" + str(min_qps))
+    print("avg_qps：" + str(avg_qps))
+    qps_detail.update({"avg_qps": str(avg_qps)})
+    qps_detail.update({"max_qps": str(max_qps)})
+    qps_detail.update({"min_qps": str(min_qps)})
+    return qps_detail
+
+def collect_extractor_qps(ip, data_count):
+    i = 0
+    while check_extractor_exists_latency(ip):
+        time.sleep(20)
+        print("等待 extractor 数据处理完成, 已等待{}s".format(i * 20))
+        i += 1
+        if i * 20 == 360:
+            pause_module(ip, 'edge', 'edge')
+    print("extractor 数据处理完成, 开始统计qps")
+    qps = check_extractor_qps(ip, data_count)
+    return qps
+
+def check_extractor_exists_latency(ip):
+    result = exec_command(ip, 'su - sa_cluster -c "sdfadmin latency extractor"')
+    if result.__contains__("total_latency_count"):
+        data = json.loads(result)
+        total_latency_count_value = data.get("total_latency_count", None)
+        if total_latency_count_value is not None and total_latency_count_value == 0:
+            return False
+        else:
+            return True
+    else:
+        return True
+
+def check_extractor_qps(ip, data_count):
+    exec_command(ip,
+                 'su - sa_cluster -c "grep speed /sensorsdata/main/logs/sdf/extractor/extractor.log  > /home/sa_cluster/log_data.log"')
+
+    time.sleep(5)
+    identification = time.time()
+    local_file_name = "log_data_{}.log".format(identification)
+    if os.path.exists(local_file_name):
+        os.remove(local_file_name)
+    cp_from(ip, "/home/sa_cluster/log_data.log", "./{}".format(local_file_name))
+    log_data = open(local_file_name, 'r')
+    speed_data_list = []
+
+    for line in log_data:
+        match = re.search(r'Extractor send speed: (\d+) records/sec', line)
         if match:
             speed_value = match.group(1)
             speed_data_list.append(int(speed_value))

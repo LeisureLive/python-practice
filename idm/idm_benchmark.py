@@ -42,40 +42,59 @@ global id3_project_qps_list
 global mock_idm_case_qps_list
 
 
-def open_idm_optimize_trigger(ip, skip_init):
+def open_idm_optimize_trigger(ip, env_version, skip_init):
     if skip_init:
         return
-    exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
-    exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
-    exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 4 --unstable" ')
-    exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
-    exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
-    exec_command(ip,
-                 'su - sa_cluster -c "aradmin config set server -p horizon -m identity_skv_proxy -n mem_mb -v 4096" ')
-    exec_command(ip,
-                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n mem_limit -v "4096Mi" \' ')
-    exec_command(ip,
-                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
-    exec_command(ip,
-                 'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
-    if check_is_cluster(ip):
+    if env_version == 'new':
         exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
         exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
-    else:
-        # 单机环境需要调整 scheduler 进程的内存大小
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
         exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 4 --unstable" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -p horizon -m identity_skv_proxy -n mem_mb -v 4096" ')
+        exec_command(ip,
+                     'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n mem_limit -v "4096Mi" \' ')
+        exec_command(ip,
+                     'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
+        if check_is_cluster(ip):
+            exec_command(ip,
+                         'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+            exec_command(ip,
+                         'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
+        else:
+            # 单机环境需要调整 scheduler 进程的内存大小
+            exec_command(ip,
+                         'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
 
-    restart_module(ip, "edge", "edge")
-    restart_module(ip, "horizon", "identity_skv_proxy")
-    restart_module(ip, "integrator", "scheduler")
+        restart_module(ip, "edge", "edge")
+        restart_module(ip, "horizon", "identity_skv_proxy")
+        restart_module(ip, "integrator", "scheduler")
+    elif env_version == 'old':
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n mem_limit -v "8192Mi"" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n jvm_xmx -v "8192Mi"" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n mem_limit -v "4096Mi"" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n jvm_xmx -v "4096Mi"" ')
+
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
+
+        restart_module(ip, "sdf", "id_mapping_skv_proxy")
+        restart_module(ip, "sdf", "extractor")
 
 
 def optimize_skv(ip, skip_init):
@@ -112,29 +131,40 @@ def optimize_skv(ip, skip_init):
 
 
 # 创建项目
-def create_new_project(ip, project_name, idm_mode, idm_engine_type, skip_init):
+def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type, skip_init):
     if skip_init:
         return
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
                  .format(project_name, project_name))
     time.sleep(5)
-    if idm_mode == 'id2':
-        if idm_engine_type == 'default':
+    if env_version == 'new':
+        if idm_mode == 'id2':
+            if idm_engine_type == 'default':
+                exec_command(ip,
+                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup"'
+                             .format(project_name))
+            elif idm_engine_type == 'fast_mode':
+                exec_command(ip,
+                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                             .format(project_name))
+        elif idm_mode == 'id3':
             exec_command(ip,
-                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup"'
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
                          .format(project_name))
-        elif idm_engine_type == 'fast_mode':
+            if idm_engine_type == 'fast_mode':
+                exec_command(ip,
+                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                             .format(project_name))
+    elif env_version == 'old':
+        if idm_mode == 'id2':
+            # 开启多对一
             exec_command(ip,
-                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
-                         .format(project_name))
-    elif idm_mode == 'id3':
-        exec_command(ip,
-                     'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
-                     .format(project_name))
-        if idm_engine_type == 'fast_mode':
+                         'su - sa_cluster -c "sbpadmin project update -n {} --enable-new-signup"'
+                         .format(project_name, project_name))
+        elif idm_mode == 'id3':
             exec_command(ip,
-                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                         'su - sa_cluster -c "sdfadmin enable_id_mapping_v3 change_to_v3 -p {} -r "'
                          .format(project_name))
 
 

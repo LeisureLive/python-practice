@@ -74,7 +74,7 @@ def gen_data(login_user_count, not_login_user_count, login_event_count, not_logi
         cursor = connector.cursor()
         try:
             # 流式查询 event 数据
-            cursor.execute("SET MEM_LIMIT=10g;")
+            cursor.execute("SET MEM_LIMIT=15g;")
             cursor.execute(event_data_sql)
             while True:
                 results = cursor.fetchmany(event_data_fetch_count)
