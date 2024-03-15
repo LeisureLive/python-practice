@@ -18,6 +18,10 @@ parser.add_argument('-login_user_count', type=int, default=0)
 parser.add_argument('-not_login_user_count', type=int, default=0)
 parser.add_argument('-login_event_count', type=int, default=0)
 parser.add_argument('-not_login_event_count', type=int, default=0)
+parser.add_argument('-storage_user_data_total_count', type=int, default=0)
+parser.add_argument('-storage_user_data_login_count', type=int, default=0)
+parser.add_argument('-storage_event_data_total_count', type=int, default=0)
+parser.add_argument('-storage_event_data_login_count', type=int, default=0)
 parser.add_argument('-user_data_parquet_path', type=str,
                     default="file:///Users/xiaowancheng/test/parq/part-01018-47193ffe-038d-4366-988f-52c756f73812-c000.snappy.parquet")
 parser.add_argument('-event_data_parquet_path', type=str,
@@ -113,20 +117,22 @@ login_user_source = user_source.selectExpr(userDataSelectExpr) \
     .withColumn("event", fns.lit(None)) \
     .withColumn("time", fns.lit(None)) \
     .withColumn("random_number", fns.rand(random_seed))
-login_user_max_id = 19800000
+login_user_max_id = args.storage_user_data_login_count
 login_user_start_num = random.randint(0, login_user_max_id - args.login_user_count)
 login_user_end_num = login_user_start_num + args.login_user_count
-login_user_source_filter = f"login_id IS NOT NULL AND id > {login_user_start_num} AND id <= {login_user_end_num}"
+login_user_source_filter = f"login_id IS NOT NULL AND id > 2932921 AND id <= 3132921"
+print(f"login_user_source_filter = {login_user_source_filter}")
 login_user_source = login_user_source.filter(login_user_source_filter)
 
 not_login_user_source = user_source.selectExpr(userDataSelectExpr) \
     .withColumn("event", fns.lit(None)) \
     .withColumn("time", fns.lit(None)) \
     .withColumn("random_number", fns.rand(random_seed))
-not_login_user_max_id = 22000000
+not_login_user_max_id = args.storage_user_data_total_count
 not_login_user_start_num = random.randint(login_user_max_id + 1, not_login_user_max_id - args.not_login_user_count)
 not_login_user_end_num = not_login_user_start_num + args.not_login_user_count
-not_login_user_source_filter = f"login_id is NULL AND id > {not_login_user_start_num} AND id <= {not_login_user_end_num}"
+not_login_user_source_filter = f"login_id is NULL AND id > 20680434 AND id <= 20680434"
+print(f"not_login_user_source_filter = {not_login_user_source_filter}")
 not_login_user_source = not_login_user_source.filter(not_login_user_source_filter)
 
 event_source = spark.read.parquet(args.event_data_parquet_path)
@@ -136,18 +142,20 @@ else:
     eventDataSelectExpr = ['anonymous_id', 'login_id', 'properties', 'identities', "'track' as type", "event", "time"]
 
 login_event_source = event_source.selectExpr(eventDataSelectExpr).withColumn("random_number", fns.rand(random_seed))
-login_event_max_id = 19800000
+login_event_max_id = args.storage_event_data_login_count
 login_event_start_num = random.randint(0, login_event_max_id - args.login_event_count)
 login_event_end_num = login_event_start_num + args.login_event_count
-login_event_source_filter = f"login_id IS NOT NULL AND id > {login_event_start_num} AND id <= {login_event_end_num}"
+login_event_source_filter = f"login_id IS NOT NULL AND id > 8322717 AND id <= 15522717"
+print(f"login_event_source_filter = {login_event_source_filter}")
 login_event_source = login_event_source.filter(login_event_source_filter)
 
 not_login_event_source = event_source.selectExpr(eventDataSelectExpr).withColumn("random_number", fns.rand(random_seed))
-not_login_event_max_id = 22000000
+not_login_event_max_id = args.storage_event_data_total_count
 not_login_event_start_num = random.randint(login_event_max_id + 1, not_login_event_max_id - args.not_login_event_count)
 not_login_event_end_num = not_login_event_start_num + args.not_login_event_count
 not_login_event_source_filter = \
-    f"login_id is NULL AND id > {not_login_event_start_num} AND id <= {not_login_event_end_num} "
+    f"login_id is NULL AND id > 20829590 AND id <= 21629590 "
+print(f"not_login_event_source_filter = {not_login_event_source_filter}")
 not_login_event_source = not_login_event_source.filter(not_login_event_source_filter)
 
 sources = [login_user_source, not_login_user_source, login_event_source, not_login_event_source]

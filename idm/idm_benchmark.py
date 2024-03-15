@@ -30,9 +30,11 @@ from idm.cases.id3_mode_cases.idm_track_v3_distinct_old_user import IdmTrack3Dis
 from idm.cases.mock_idm_cases.profile_set_v2_distinct_new_more_props_anonymous_user import \
     MockIdmProfileSetDistinctNewUserMorePropsCase
 from idm.cases.mock_idm_cases.track_v2_distinct_new_user import MockIdmTrackDistinctNewUserCase
-from idm.tools.common_tools import exec_command, check_is_cluster, restart_module, pause_module, start_module, \
-    waiting_sdi_consume_latency, clear_log, get_ips_from_hosts, get_sdi_version, get_horizon_version, close_mock_idm, \
-    open_idm_mock
+from idm.tools.common_tools import exec_command, check_is_cluster, restart_module, get_ips_from_hosts, get_sdi_version, \
+    get_horizon_version, \
+    close_mock_idm, \
+    open_idm_mock, get_env_version, pause_import_and_wait_consume_latency, start_import_and_pause_handler, \
+    start_handler, get_sdf_version
 from idm.tools.email_tool import send_benchmark_result
 
 sys.path.append('..')
@@ -46,55 +48,63 @@ def open_idm_optimize_trigger(ip, env_version, skip_init):
     if skip_init:
         return
     if env_version == 'new':
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 4 --unstable" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -p horizon -m identity_skv_proxy -n mem_mb -v 4096" ')
-        exec_command(ip,
-                     'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n mem_limit -v "4096Mi" \' ')
-        exec_command(ip,
-                     'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
-        exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
-        if check_is_cluster(ip):
-            exec_command(ip,
-                         'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
-            exec_command(ip,
-                         'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
-        else:
-            # 单机环境需要调整 scheduler 进程的内存大小
-            exec_command(ip,
-                         'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
+        open_idm_optimize_trigger_in_new_env(ip)
+    else:
+        open_idm_optimize_trigger_in_old_env(ip)
 
-        restart_module(ip, "edge", "edge")
-        restart_module(ip, "horizon", "identity_skv_proxy")
-        restart_module(ip, "integrator", "scheduler")
-    elif env_version == 'old':
-        exec_command(ip,
-                     'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n mem_limit -v "8192Mi"" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n jvm_xmx -v "8192Mi"" ')
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
 
+def open_idm_optimize_trigger_in_new_env(ip):
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 4 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p horizon -m identity_skv_proxy -n mem_mb -v 4096" ')
+    exec_command(ip,
+                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n mem_limit -v "4096Mi" \' ')
+    exec_command(ip,
+                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
+    if check_is_cluster(ip):
         exec_command(ip,
-                     'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n mem_limit -v "4096Mi"" ')
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
         exec_command(ip,
-                     'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n jvm_xmx -v "4096Mi"" ')
+                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
+    else:
+        # 单机环境需要调整 scheduler 进程的内存大小
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
 
-        exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
+    restart_module(ip, "edge", "edge")
+    restart_module(ip, "horizon", "identity_skv_proxy")
+    restart_module(ip, "integrator", "scheduler")
 
-        restart_module(ip, "sdf", "id_mapping_skv_proxy")
-        restart_module(ip, "sdf", "extractor")
+
+def open_idm_optimize_trigger_in_old_env(ip):
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n mem_limit -v "8192Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n jvm_xmx -v "8192Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n mem_limit -v "4096Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n jvm_xmx -v "4096Mi"" ')
+
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
+
+    restart_module(ip, "sdf", "id_mapping_skv_proxy")
+    restart_module(ip, "sdf", "extractor")
 
 
 def optimize_skv(ip, skip_init):
@@ -134,11 +144,11 @@ def optimize_skv(ip, skip_init):
 def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type, skip_init):
     if skip_init:
         return
-    exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
-                 .format(project_name, project_name))
-    time.sleep(5)
     if env_version == 'new':
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                     .format(project_name, project_name))
+        time.sleep(5)
         if idm_mode == 'id2':
             if idm_engine_type == 'default':
                 exec_command(ip,
@@ -156,7 +166,11 @@ def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type,
                 exec_command(ip,
                              'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
                              .format(project_name))
-    elif env_version == 'old':
+    else:
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                     .format(project_name, project_name))
+        time.sleep(5)
         if idm_mode == 'id2':
             # 开启多对一
             exec_command(ip,
@@ -194,28 +208,33 @@ def _make_common_content_template(status, build_url, cucumber_dict: dict):
     return result
 
 
-def push_result(ip_list, idm_engine_type, build_user_id, build_url, webhook, import_mode):
+def push_result(ip_list, env_version, idm_engine_type, build_user_id, build_url, webhook, import_mode):
     cucumber_dict = {}
     cucumber_dict.update({"执行模式": import_mode})
     cucumber_dict.update({"机器 IP": ip_list})
-    env_type = "单机"
+
     is_cluster = check_is_cluster(ip_list[0])
-    if is_cluster:
-        env_type = "集群"
-    sdi_version = get_sdi_version(ip_list[0])
-    horizon_version = get_horizon_version(ip_list[0])
     node_num = len(ip_list)
-    cucumber_dict.update({"环境类型": env_type})
-    cucumber_dict.update({'sdi 版本': sdi_version})
-    cucumber_dict.update({'horizon 版本': horizon_version})
-    if idm_engine_type == 'default':
-        id2_engine_name = "[兼容模式] "
-        id3_engine_name = "[ID3 模式] "
-        cucumber_dict.update({"IDM 引擎": "兼容模式引擎 & ID3引擎"})
+    if env_version == 'new':
+        cucumber_dict.update({"环境类型": "SDH 架构"})
+        sdi_version = get_sdi_version(ip_list[0])
+        horizon_version = get_horizon_version(ip_list[0])
+        cucumber_dict.update({'sdi 版本': sdi_version})
+        cucumber_dict.update({'horizon 版本': horizon_version})
+        if idm_engine_type == 'default':
+            id2_engine_name = "[兼容模式] "
+            id3_engine_name = "[ID3 模式] "
+            cucumber_dict.update({"IDM 引擎": "兼容模式引擎 & ID3引擎"})
+        else:
+            id2_engine_name = "[高性能尽可能关联 2 id] "
+            id3_engine_name = "[高性能 ID3] "
+            cucumber_dict.update({"IDM 引擎": "高性能引擎"})
     else:
-        id2_engine_name = "[高性能尽可能关联 2 id] "
-        id3_engine_name = "[高性能 ID3] "
-        cucumber_dict.update({"IDM 引擎": "高性能引擎"})
+        cucumber_dict.update({"环境类型": "SDF 架构"})
+        sdf_version = get_sdf_version(ip_list[0])
+        cucumber_dict.update({'sdf 版本': sdf_version})
+        id2_engine_name = "[ID2 多对一] "
+        id3_engine_name = "[ID3 模式] "
 
     for case_qps in id2_project_qps_list:
         key = id2_engine_name + str(case_qps['title'])
@@ -302,16 +321,17 @@ if __name__ == "__main__":
     id2_mode_project_name = args.id2_mode_project_name + "_" + idm_engine_type
     id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type
     mock_idm_project_name = args.mock_idm_project_name + "_" + idm_engine_type
+    env_version = get_env_version(exec_ip)
     # 1、对 skv 内存进行调优
     optimize_skv(exec_ip, skip_init)
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
-    open_idm_optimize_trigger(exec_ip, skip_init)
+    open_idm_optimize_trigger(exec_ip, env_version, skip_init)
     # 3、对 id2 项目进行测试
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
         project_name = args.id2_mode_project_name
-        create_new_project(exec_ip, project_name, 'id2', idm_engine_type, skip_init)
+        create_new_project(exec_ip, env_version, project_name, 'id2', idm_engine_type, skip_init)
         identification = time.time()
         test_cases = [
             # IdmProfileSetV2DistinctNewUserLessPropsCase(args.build_user_id, identification),
@@ -335,21 +355,17 @@ if __name__ == "__main__":
                 test_case.do_import_test(exec_ip, project_name, id2_mode_data_count, import_mode)
                 id2_project_qps_list.append(test_case.collect_import_qps(id2_mode_data_count))
             else:
-                pause_module(exec_ip, "edge", "edge")
-                start_module(exec_ip, "integrator", "scheduler")
-                waiting_sdi_consume_latency(exec_ip)
-                pause_module(exec_ip, "integrator", "scheduler")
-                start_module(exec_ip, "edge", "edge")
-                clear_log(exec_ip)
+                pause_import_and_wait_consume_latency(exec_ip, env_version)
+                start_import_and_pause_handler(exec_ip, env_version)
                 test_case.do_test(servers, id2_mode_data_count, list_count)
-                start_module(exec_ip, "integrator", "scheduler")
+                start_handler(exec_ip, env_version)
                 id2_project_qps_list.append(test_case.collect_qps(exec_ip, id2_mode_data_count))
 
     # 5、对 id3 项目进行测试
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
         project_name = args.id3_mode_project_name
-        create_new_project(exec_ip, project_name, 'id3', idm_engine_type, skip_init)
+        create_new_project(exec_ip, env_version, project_name, 'id3', idm_engine_type, skip_init)
         identification = time.time()
         test_cases = [
             # IdmProfileSetV3DistinctNewUserLessPropsCase(args.build_user_id, identification),
@@ -369,22 +385,18 @@ if __name__ == "__main__":
                 test_case.do_import_test(exec_ip, project_name, id3_mode_data_count, import_mode)
                 id3_project_qps_list.append(test_case.collect_import_qps(id3_mode_data_count))
             else:
-                pause_module(exec_ip, "edge", "edge")
-                start_module(exec_ip, "integrator", "scheduler")
-                waiting_sdi_consume_latency(exec_ip)
-                pause_module(exec_ip, "integrator", "scheduler")
-                start_module(exec_ip, "edge", "edge")
-                clear_log(exec_ip)
+                pause_import_and_wait_consume_latency(exec_ip, env_version)
+                start_import_and_pause_handler(exec_ip, env_version)
                 test_case.do_test(servers, id3_mode_data_count, list_count)
-                start_module(exec_ip, "integrator", "scheduler")
+                start_handler(exec_ip, env_version)
                 id3_project_qps_list.append(test_case.collect_qps(exec_ip, id3_mode_data_count))
 
     # 6、对 mock idm case 进行测试
     mock_idm_case_qps_list = []
-    if mock_idm_data_count > 0:
+    if mock_idm_data_count > 0 and env_version == 'new':
         # 尝试创建项目, 已存在不会报错
         project_name = args.mock_idm_project_name
-        create_new_project(exec_ip, project_name, 'id2', idm_engine_type, skip_init)
+        create_new_project(exec_ip, env_version, project_name, 'id2', idm_engine_type, skip_init)
         identification = time.time()
         # 开启 mock idm
         open_idm_mock(exec_ip)
@@ -399,21 +411,18 @@ if __name__ == "__main__":
             servers.append(server)
 
         for test_case in test_cases:
-            pause_module(exec_ip, "edge", "edge")
-            start_module(exec_ip, "integrator", "scheduler")
-            waiting_sdi_consume_latency(exec_ip)
-            pause_module(exec_ip, "integrator", "scheduler")
-            start_module(exec_ip, "edge", "edge")
-            clear_log(exec_ip)
+            pause_import_and_wait_consume_latency(exec_ip, env_version)
+            start_import_and_pause_handler(exec_ip, env_version)
             test_case.do_test(servers, mock_idm_data_count, list_count)
-            start_module(exec_ip, "integrator", "scheduler")
+            start_handler(exec_ip, env_version)
             mock_idm_case_qps_list.append(test_case.collect_qps(exec_ip, mock_idm_data_count))
         close_mock_idm(exec_ip)
 
     # 7、推送结果
     if args.result_delivery_method.__contains__('email'):
-        send_benchmark_result(ip_list, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
+        send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
                               mock_idm_case_qps_list,
                               'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', args.receiver_emails)
     elif args.result_delivery_method.__contains__('push'):
-        push_result(ip_list, idm_engine_type, args.build_user_id, args.build_url, args.webhook, import_mode)
+        push_result(ip_list, env_version, idm_engine_type, args.build_user_id, args.build_url, args.webhook,
+                    import_mode)

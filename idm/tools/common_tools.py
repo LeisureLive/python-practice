@@ -29,6 +29,14 @@ def get_pwd():
     return resp.text
 
 
+def get_env_version(ip):
+    horizon_version = get_horizon_version(ip)
+    if horizon_version != 'unknown':
+        return 'new'
+    else:
+        return 'old'
+
+
 def get_sdi_version(ip):
     versions = exec_command(ip, "su - sa_cluster -c 'aradmin version' ")
     matches = re.findall(r"│\s+integrator\s+│\s+(\d+\.\d+\.\d+\.\d+)\s+│\s+(\w+)\s+│", versions)
@@ -56,6 +64,7 @@ def get_horizon_version(ip):
         print("未找到匹配的信息")
         return 'unknown'
 
+
 def get_sdf_version(ip):
     versions = exec_command(ip, "su - sa_cluster -c 'aradmin version' ")
     matches = re.findall(r"│\s+sdf\s+│\s+(\d+\.\d+\.\d+\.\d+)\s+│\s+(\w+)\s+│", versions)
@@ -82,7 +91,7 @@ def open_idm_mock(ip):
 
 def exec_command_and_check(ip, cmd):
     print(
-        f'exec_command_and_check. [id={ip}, cmd={cmd}, start_time={datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]')
+        f'exec_command_and_check. [ip={ip}, cmd={cmd}, start_time={datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]')
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(hostname=ip, username=username, password=get_pwd(), timeout=120)
@@ -99,8 +108,8 @@ def exec_command_and_check(ip, cmd):
     return result.decode()
 
 
-def exec_command(ip, cmd):
-    print(f'exec_command. [id={ip}, cmd={cmd}, start_time={datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]')
+def exec_command(ip, cmd, withstderr=False):
+    print(f'exec_command. [ip={ip}, cmd={cmd}, start_time={datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]')
     retries = 1
     ssh = paramiko.SSHClient()
     while retries <= 3:
@@ -109,6 +118,8 @@ def exec_command(ip, cmd):
             ssh.connect(hostname=ip, username=username, password=get_pwd(), timeout=120)
             stdin, stdout, stderr = ssh.exec_command(cmd)
             result = stdout.read()
+            if withstderr:
+                result += stderr.read()
             if not result:
                 result = stderr.read()
             print(result.decode())
@@ -126,7 +137,6 @@ def exec_command(ip, cmd):
         finally:
             if ssh.get_transport() is not None:
                 ssh.close()
-    return ""
 
 
 def split_list(input_list, batch_size):
@@ -196,6 +206,38 @@ def extract_ip_from_line(line):
     return None
 
 
+def pause_import_and_wait_consume_latency(ip, env_version):
+    print("暂停导入并等待数据延迟被消费完成")
+    if env_version == 'new':
+        pause_module(ip, "edge", "edge")
+        start_module(ip, "integrator", "scheduler")
+        waiting_sdi_consume_latency(ip)
+    else:
+        pause_module(ip, "edge", "edge")
+        start_module(ip, "sdf", "extractor")
+        waiting_extractor_consume_latency(ip)
+
+
+def start_import_and_pause_handler(ip, env_version):
+    print("开启导入并暂停数据处理, 堆积压测数据")
+    if env_version == 'new':
+        pause_module(ip, "integrator", "scheduler")
+        start_module(ip, "edge", "edge")
+        clear_sdi_scheduler_log(ip)
+    else:
+        pause_module(ip, "sdf", "extractor")
+        start_module(ip, "edge", "edge")
+        clear_extractor_log(ip)
+
+
+def start_handler(ip, env_version):
+    print("开启数据处理, 消费堆积数据")
+    if env_version == 'new':
+        start_module(ip, "integrator", "scheduler")
+    else:
+        start_module(ip, "sdf", "extractor")
+
+
 def restart_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "aradmin restart -p {} -m {}" '.format(product, module))
 
@@ -234,11 +276,34 @@ def waiting_sdi_consume_latency(ip):
             print("检测 sdi 存在延迟, 已等待 {}s".format(20 * (i - 1)))
 
 
-def clear_log(ip):
+def waiting_extractor_consume_latency(ip):
+    i = 0
+    while True:
+        result = exec_command(ip, 'su - sa_cluster -c "sdfadmin latency extractor"')
+        if result.__contains__("total_latency_count"):
+            data = json.loads(result)
+            total_latency_count_value = data.get("total_latency_count", None)
+            if total_latency_count_value is not None and total_latency_count_value == 0:
+                print("检测 extractor 无延迟")
+                break
+            else:
+                i = i + 1
+                print("检测 extractor 存在延迟, 已等待 {}s".format(20 * (i - 1)))
+        else:
+            i = i + 1
+            time.sleep(20)
+            print("检测 extractor 延迟失败, 已等待 {}s".format(20 * (i - 1)))
+
+
+def clear_sdi_scheduler_log(ip):
     is_cluster = check_is_cluster(ip)
     if not is_cluster:
         # 单机环境每个 case 压测前清空日志, 避免统计 qps 时拿到上一次的
         exec_command(ip, 'su - sa_cluster -c "echo > /sensorsdata/main/logs/integrator/scheduler/chain.log"')
+
+
+def clear_extractor_log(ip):
+    exec_command(ip, 'su - sa_cluster -c "echo > /sensorsdata/main/logs/sdf/extractor/extractor.log"')
 
 
 def check_is_cluster(ip):
@@ -291,6 +356,7 @@ def import_api(gzipType, dataType, jsonString, server):
     s = requests.session()
     s.keep_alive = False
     response = requests.post(server, data=payload, headers=headers)
+    print(response)
 
 
 def dealwith(gzipType, jsonString):
@@ -375,6 +441,7 @@ def check_sdi_qps(ip, line_count, data_count):
     qps_detail.update({"min_qps": str(min_qps)})
     return qps_detail
 
+
 def collect_extractor_qps(ip, data_count):
     i = 0
     while check_extractor_exists_latency(ip):
@@ -387,6 +454,7 @@ def collect_extractor_qps(ip, data_count):
     qps = check_extractor_qps(ip, data_count)
     return qps
 
+
 def check_extractor_exists_latency(ip):
     result = exec_command(ip, 'su - sa_cluster -c "sdfadmin latency extractor"')
     if result.__contains__("total_latency_count"):
@@ -398,6 +466,7 @@ def check_extractor_exists_latency(ip):
             return True
     else:
         return True
+
 
 def check_extractor_qps(ip, data_count):
     exec_command(ip,
