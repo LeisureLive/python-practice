@@ -118,9 +118,9 @@ login_user_source = user_source.selectExpr(userDataSelectExpr) \
     .withColumn("time", fns.lit(None)) \
     .withColumn("random_number", fns.rand(random_seed))
 login_user_max_id = args.storage_user_data_login_count
-login_user_start_num = random.randint(0, login_user_max_id - args.login_user_count)
-login_user_end_num = login_user_start_num + args.login_user_count
-login_user_source_filter = f"login_id IS NOT NULL AND id > 2932921 AND id <= 3132921"
+login_user_start_num = 0
+login_user_end_num = min(login_user_start_num + args.login_user_count, login_user_max_id)
+login_user_source_filter = f"login_id IS NOT NULL AND id > {login_user_start_num} AND id <= {login_user_end_num}"
 print(f"login_user_source_filter = {login_user_source_filter}")
 login_user_source = login_user_source.filter(login_user_source_filter)
 
@@ -129,9 +129,9 @@ not_login_user_source = user_source.selectExpr(userDataSelectExpr) \
     .withColumn("time", fns.lit(None)) \
     .withColumn("random_number", fns.rand(random_seed))
 not_login_user_max_id = args.storage_user_data_total_count
-not_login_user_start_num = random.randint(login_user_max_id + 1, not_login_user_max_id - args.not_login_user_count)
-not_login_user_end_num = not_login_user_start_num + args.not_login_user_count
-not_login_user_source_filter = f"login_id is NULL AND id > 20680434 AND id <= 20680434"
+not_login_user_start_num = login_user_max_id
+not_login_user_end_num = min(not_login_user_start_num + args.not_login_user_count, not_login_user_max_id)
+not_login_user_source_filter = f"login_id is NULL AND id > {not_login_user_start_num} AND id <= {not_login_user_end_num}"
 print(f"not_login_user_source_filter = {not_login_user_source_filter}")
 not_login_user_source = not_login_user_source.filter(not_login_user_source_filter)
 
@@ -143,18 +143,17 @@ else:
 
 login_event_source = event_source.selectExpr(eventDataSelectExpr).withColumn("random_number", fns.rand(random_seed))
 login_event_max_id = args.storage_event_data_login_count
-login_event_start_num = random.randint(0, login_event_max_id - args.login_event_count)
-login_event_end_num = login_event_start_num + args.login_event_count
-login_event_source_filter = f"login_id IS NOT NULL AND id > 8322717 AND id <= 15522717"
+login_event_start_num = 0
+login_event_end_num = min(login_event_max_id, login_event_start_num + args.login_event_count)
+login_event_source_filter = f"login_id IS NOT NULL AND id > {login_event_start_num} AND id <= {login_event_end_num}"
 print(f"login_event_source_filter = {login_event_source_filter}")
 login_event_source = login_event_source.filter(login_event_source_filter)
 
 not_login_event_source = event_source.selectExpr(eventDataSelectExpr).withColumn("random_number", fns.rand(random_seed))
 not_login_event_max_id = args.storage_event_data_total_count
-not_login_event_start_num = random.randint(login_event_max_id + 1, not_login_event_max_id - args.not_login_event_count)
-not_login_event_end_num = not_login_event_start_num + args.not_login_event_count
-not_login_event_source_filter = \
-    f"login_id is NULL AND id > 20829590 AND id <= 21629590 "
+not_login_event_start_num = login_event_max_id
+not_login_event_end_num = min(not_login_event_max_id, not_login_event_start_num + args.not_login_event_count)
+not_login_event_source_filter = f"login_id is NULL AND id > {not_login_event_start_num} AND id <= {not_login_event_end_num} "
 print(f"not_login_event_source_filter = {not_login_event_source_filter}")
 not_login_event_source = not_login_event_source.filter(not_login_event_source_filter)
 

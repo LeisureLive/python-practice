@@ -6,15 +6,19 @@ import uuid
 import os
 import requests
 import sys
+
 sys.path.append('../')
 from idm import idm_benchmark, gen_basic_data
 from idm.tools import common_tools
 
+
 def exec_command_and_check(ip, cmd):
     return common_tools.exec_command_and_check(ip, f"su - sa_cluster -c '{cmd}'")
 
+
 def exec_command(ip, cmd):
     return common_tools.exec_command(ip, f"su - sa_cluster -c '{cmd}'")
+
 
 def process(param):
     # 测试机工作目录
@@ -23,13 +27,14 @@ def process(param):
     skip_init = param.skip_init == "true"
     exec_ip = param.ip
     project = param.project
+    env_version = common_tools.get_env_version(exec_ip)
     try:
         # 1、对 skv 内存进行调优
         idm_benchmark.optimize_skv(exec_ip, skip_init)
         # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
-        idm_benchmark.open_idm_optimize_trigger(exec_ip, skip_init)
+        idm_benchmark.open_idm_optimize_trigger(exec_ip, env_version, skip_init)
         # 3、新建项目
-        idm_benchmark.create_new_project(exec_ip, project, param.id_mode, param.idm_engine_type, skip_init)
+        idm_benchmark.create_new_project(exec_ip, env_version, project, param.id_mode, param.idm_engine_type, skip_init)
         # 4、生成数据
         gen_basic_data.install_spark(exec_ip, work_path, script_dir)
         gen_basic_data.send_code(exec_ip, work_path, script_dir)
@@ -47,6 +52,7 @@ def process(param):
     # 6、输出数据
     push_result(param, result)
 
+
 def start_spark_job(args, work_path, script_dir, data_type):
     output_path = f"/sa/runtime/normal_case_benchmark_temp/{data_type}"
     if data_type == "profile_set":
@@ -60,7 +66,7 @@ def start_spark_job(args, work_path, script_dir, data_type):
     exec_command_and_check(args.ip, f"hdfs dfs -mkdir -p {output_path}")
     # 检查是否有任务正在跑
     job_name_prefix = "convert_basic_data_spark_job"
-    job_name = job_name_prefix+str(int(time.time() * 1000))
+    job_name = job_name_prefix + str(int(time.time() * 1000))
     gen_basic_data.kill_running_job(args.ip, job_name_prefix)
     # 产出数据
     spark_submit_cmd = f'''
@@ -73,7 +79,7 @@ cd {work_path} && \
   --deploy-mode client \
   --executor-memory "2G"  \
   --driver-memory "1G" \
-  --num-executors "{int(int(args.data_prepare_parallel)/2)}" \
+  --num-executors "{int(int(args.data_prepare_parallel) / 2)}" \
   --executor-cores "2" \
   --py-files data_gen.zip \
   {script_dir}/json_converter.py \
@@ -88,6 +94,7 @@ cd {work_path} && \
     if not gen_basic_data.check_job_status(args.ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
     return output_path
+
 
 def build_result(profile_set_result, track_result):
     result = ""
@@ -120,6 +127,7 @@ def push_result(args, result):
     wx_request = requests.post(args.webhook, bytes(json_data, 'utf-8'), headers=header)
     result = wx_request.json()
     print(result)
+
 
 def build_common_msg(args, result):
     msg = "【数据接入场景测试-批导入】"
@@ -197,6 +205,7 @@ def exec_sql(ip, sql):
     sql_file = gen_temp_sql_file(ip, sql)
     cmd = f"impala-shell -d default -f {sql_file}"
     exec_command_and_check(ip, cmd)
+
 
 def gen_temp_sql_file(ip, sql):
     temp_path = "/tmp/normal_case_benchmark_temp.sql"

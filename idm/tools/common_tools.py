@@ -22,10 +22,13 @@ def get_pwd():
     }
     resp = requests.get(url, headers=header, params=None)
     if resp.status_code == 404:
-        return None
+        print("get pwd error, url = %s, status_code = %s, resp_content = %s" % (url, resp.status_code, resp.text))
+        return "uXkmsrTHQp#c8EbZ"
     elif resp.status_code != 200:
-        raise RuntimeError('get %s error %s, %s' % (url, resp.status_code, resp.text))
-    # print(resp.text)
+        # raise RuntimeError('get %s error %s, %s' % (url, resp.status_code, resp.text))
+        print("get pwd error, url = %s, status_code = %s, resp_content = %s" % (url, resp.status_code, resp.text))
+        # print(resp.text)
+        return "uXkmsrTHQp#c8EbZ"
     return resp.text
 
 
