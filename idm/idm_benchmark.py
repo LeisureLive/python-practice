@@ -59,7 +59,7 @@ def open_idm_optimize_trigger_in_new_env(ip):
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
     exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 4 --unstable" ')
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 10 --unstable" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
     exec_command(ip,
@@ -72,6 +72,8 @@ def open_idm_optimize_trigger_in_new_env(ip):
                  'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
     exec_command(ip,
                  'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
+    exec_command(ip,
+                 "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable")
     if check_is_cluster(ip):
         exec_command(ip,
                      'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
@@ -102,6 +104,8 @@ def open_idm_optimize_trigger_in_old_env(ip):
 
     exec_command(ip,
                  'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
+    exec_command(ip,
+                 "sbpadmin business_config set -p sdf -n extractor -k max_before_deviation_hour_cluster -v 24000 --unstable")
 
     restart_module(ip, "sdf", "id_mapping_skv_proxy")
     restart_module(ip, "sdf", "extractor")

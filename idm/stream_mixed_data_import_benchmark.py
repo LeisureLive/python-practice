@@ -44,8 +44,6 @@ def process(args):
         idm_benchmark.create_new_project(target_ip, target_env_version, project, args.id_mode, args.idm_engine_type,
                                          skip_init)
         exec_command_and_check(target_ip, "skvadmin balance start -m skv_offline")
-        exec_command_and_check(target_ip,
-                               "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable")
         # 3. 导入数据
         common_tools.pause_import_and_wait_consume_latency(target_ip, target_env_version)
         common_tools.start_import_and_pause_handler(target_ip, target_env_version)

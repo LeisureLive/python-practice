@@ -82,6 +82,144 @@ def get_sdf_version(ip):
         return 'unknown'
 
 
+def optimize_skv(ip, skip_init):
+    if skip_init:
+        return
+    result = exec_command(ip, 'su - sa_cluster -c "skvadmin health -m skv_offline"')
+    if result.__contains__("expected val is"):
+        print("skv 内存需要调优")
+        role_config_group = ""
+        cache_capacity_size = ""
+        write_buffer_size = ""
+        match_role_config_group = re.search(r'role_config_group_replica_server_\d+', result)
+        match_cache_capacity = re.search(r'rocksdb_block_cache_capacity for [^ ]+ expected val is (\d+),', result)
+        match_write_buffer = re.search(r'rocksdb_total_size_across_write_buffer for [^ ]+ expected val is (\d+),',
+                                       result)
+        if match_role_config_group:
+            role_config_group = match_role_config_group.group(0)
+        if match_cache_capacity:
+            cache_capacity_size = match_cache_capacity.group(1)
+        if match_write_buffer:
+            write_buffer_size = match_write_buffer.group(1)
+
+        if cache_capacity_size != "":
+            exec_command(ip,
+                         ' su - sa_cluster -c \'mothershipadmin role_config_group config set -m skv_offline --namespace replica_server.ini -r replica_server --role_config_group {} -k "pegasus.server|rocksdb_block_cache_capacity" -v {} --yes\' '
+                         .format(role_config_group, cache_capacity_size))
+        if write_buffer_size is not None:
+            exec_command(ip,
+                         ' su - sa_cluster -c \'mothershipadmin role_config_group config set -m skv_offline --namespace replica_server.ini -r replica_server --role_config_group {} -k "pegasus.server|rocksdb_total_size_across_write_buffer" -v {} --yes\' '
+                         .format(role_config_group, write_buffer_size))
+        exec_command(ip, 'su - sa_cluster -c "mothershipadmin restart -m skv_offline"')
+    else:
+        print("skv 内存不需要调优")
+
+
+# 创建项目
+def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type, skip_init):
+    if skip_init:
+        return
+    if env_version == 'new':
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                     .format(project_name, project_name))
+        time.sleep(5)
+        if idm_mode == 'id2':
+            if idm_engine_type == 'default':
+                exec_command(ip,
+                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup"'
+                             .format(project_name))
+            elif idm_engine_type == 'fast_mode':
+                exec_command(ip,
+                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                             .format(project_name))
+        elif idm_mode == 'id3':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
+                         .format(project_name))
+            if idm_engine_type == 'fast_mode':
+                exec_command(ip,
+                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                             .format(project_name))
+    else:
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                     .format(project_name, project_name))
+        time.sleep(5)
+        if idm_mode == 'id2':
+            # 开启多对一
+            exec_command(ip,
+                         'su - sa_cluster -c "sbpadmin project update -n {} --enable-new-signup"'
+                         .format(project_name, project_name))
+        elif idm_mode == 'id3':
+            exec_command(ip,
+                         'su - sa_cluster -c "sdfadmin enable_id_mapping_v3 change_to_v3 -p {} -r "'
+                         .format(project_name))
+
+
+def open_idm_optimize_trigger(ip, env_version, skip_init):
+    if skip_init:
+        return
+    if env_version == 'new':
+        open_idm_optimize_trigger_in_new_env(ip)
+    else:
+        open_idm_optimize_trigger_in_old_env(ip)
+
+
+def open_idm_optimize_trigger_in_new_env(ip):
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 10 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p horizon -m identity_skv_proxy -n mem_mb -v 4096" ')
+    exec_command(ip,
+                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n mem_limit -v "4096Mi" \' ')
+    exec_command(ip,
+                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
+    if check_is_cluster(ip):
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
+    else:
+        # 单机环境需要调整 scheduler 进程的内存大小
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
+
+    restart_module(ip, "edge", "edge")
+    restart_module(ip, "horizon", "identity_skv_proxy")
+    restart_module(ip, "integrator", "scheduler")
+
+
+def open_idm_optimize_trigger_in_old_env(ip):
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n mem_limit -v "8192Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m extractor -r extractor -n jvm_xmx -v "8192Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n mem_limit -v "4096Mi"" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin ss set -p sdf -m id_mapping_skv_proxy -r id_mapping_skv_proxy -n jvm_xmx -v "4096Mi"" ')
+
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
+
+    restart_module(ip, "sdf", "id_mapping_skv_proxy")
+    restart_module(ip, "sdf", "extractor")
+
+
 def close_mock_idm(ip):
     exec_command(ip,
                  "su - sa_cluster -c 'sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_mock -v false --unstable ' ")
@@ -266,7 +404,7 @@ def waiting_sdi_consume_latency(ip):
     i = 0
     while True:
         result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency"')
-        if result.__contains__("don't exist latency"):
+        if result.__contains__("don't exist latency") or get_sdi_latency_total_size(result) < 10:
             print("检测 sdi 无延迟")
             break
         elif i >= 120:
@@ -279,6 +417,16 @@ def waiting_sdi_consume_latency(ip):
             print("检测 sdi 存在延迟, 已等待 {}s".format(20 * (i - 1)))
 
 
+def get_sdi_latency_total_size(result):
+    pattern = re.compile(r'delay_record_size=(\d+)')
+    delay_sizes = pattern.findall(result)
+
+    total_delay_size = 0
+    for delay_size in delay_sizes:
+        total_delay_size += int(delay_size)
+    return total_delay_size
+
+
 def waiting_extractor_consume_latency(ip):
     i = 0
     while True:
@@ -286,7 +434,7 @@ def waiting_extractor_consume_latency(ip):
         if result.__contains__("total_latency_count"):
             data = json.loads(result)
             total_latency_count_value = data.get("total_latency_count", None)
-            if total_latency_count_value is not None and total_latency_count_value == 0:
+            if total_latency_count_value is not None and total_latency_count_value <= 10:
                 print("检测 extractor 无延迟")
                 break
             else:
