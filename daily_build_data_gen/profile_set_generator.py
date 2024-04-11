@@ -9,21 +9,23 @@ sys.path.append("..")
 
 
 class ProfileSetGenerator:
-    PROP_NAME_PREFIX = "property_event_"
+    PROP_NAME_PREFIX = "property_user_"
     PROP_COUNT_MAP = {
-        DataType.STRING: 10,
-        DataType.NUMBER: 5,
-        DataType.NUMBER_WITH_DOUBLE: 5,
-        DataType.BOOL: 2,
-        DataType.DATETIME: 1,
-        DataType.LIST: 1
+        DataType.STRING: 60,
+        DataType.NUMBER: 30,
+        DataType.NUMBER_WITH_DOUBLE: 20,
+        DataType.BOOL: 5,
+        DataType.DATETIME: 5,
+        DataType.LIST: 5
     }
 
-    def __init__(self, idm_version, count, login_percent, new_user_percent, exist_identities) -> None:
+    def __init__(self, idm_version, count, login_percent, new_user_percent, device_id_list_size, exist_identities) -> None:
         super().__init__()
-        self.login_user_max_id = int(count) * login_percent
-        self.new_login_user_max_id = self.login_user_max_id * new_user_percent
-        self.new_not_login_user_max_id = self.login_user_max_id + (count - self.login_user_max_id) * new_user_percent
+        self.login_user_max_id = int(int(count) * login_percent)
+        self.login_new_user_max_id = int(self.login_user_max_id * new_user_percent)
+        self.not_login_new_user_max_id = \
+            self.login_user_max_id + int((count - self.login_user_max_id) * new_user_percent)
+        self.device_id_list_size = device_id_list_size
         self.exist_identities = exist_identities
         self.idm_version = idm_version
         # 必传
@@ -38,39 +40,54 @@ class ProfileSetGenerator:
     def gen_data(self, row):
         ret = {}
         id = row['id']
+        index = 0
+        if len(self.exist_identities) > 0:
+            index = id % len(self.exist_identities)
         random_uuid = str(uuid.uuid4())
         current_timestamp = str(int(time.time() * 1000))
         is_old_user = False
         # 填充 distinct_id
-        if id < self.new_login_user_max_id:
+        if id < self.login_new_user_max_id:
             # 登录新用户
             ret['login_id'] = 'login_id_' + random_uuid + current_timestamp
             ret['distinct_id'] = 'login_id_' + random_uuid + current_timestamp
             ret['anonymous_id'] = 'device_' + random_uuid + current_timestamp
         elif id < self.login_user_max_id:
             # 登录老用户
-            ret['login_id'] = self.exist_identities[id]['login_id']
-            ret['distinct_id'] = self.exist_identities[id]['distinct_id']
-            ret['anonymous_id'] = self.exist_identities[id]['anonymous_id']
+            exist_identity = self.exist_identities[index]
+            if 'login_id' not in exist_identity:
+                # 如果输入的用户是匿名用户, 那生成新 login_id 给已存在的匿名用户，属于建立多对一关联
+                suffix = int(id / self.device_id_list_size)
+                login_id = 'login_id_' + str(suffix) + '_' + str(self.device_id_list_size)
+                ret['login_id'] = login_id
+                ret['distinct_id'] = login_id
+                ret['anonymous_id'] = self.exist_identities[index]['distinct_id']
+            else:
+                ret['login_id'] = exist_identity['login_id']
+                ret['distinct_id'] = exist_identity['distinct_id']
+                ret['anonymous_id'] = exist_identity['anonymous_id']
             is_old_user = True
-        elif id < self.new_not_login_user_max_id:
+        elif id < self.not_login_new_user_max_id:
             # 匿名新用户
             ret['distinct_id'] = 'device_' + random_uuid + current_timestamp
         else:
             # 匿名老用户
-            ret['distinct_id'] = self.exist_identities[id]['distinct_id']
+            if 'anonymous_id' in self.exist_identities[index]:
+                ret['distinct_id'] = self.exist_identities[index]['anonymous_id']
+            else:
+                ret['distinct_id'] = self.exist_identities[index]['distinct_id']
             is_old_user = True
 
         # 填充 identity
         if self.idm_version == 'id3' and is_old_user:
+            exist_identity = self.exist_identities[index]
             ret['identities'] = {}
-            ret['identities']['$identity_login_id'] = self.exist_identities[id]['identities']['$identity_login_id']
-            ret['identities']['$identity_cookie_id'] = self.exist_identities[id]['identities']['$identity_cookie_id']
-            ret['identities']['$identity_mobile'] = self.exist_identities[id]['identities']['$identity_mobile']
-            ret['identities']['$identity_idfv'] = self.exist_identities[id]['identities']['$identity_idfv']
-            ret['identities']['$identity_email'] = self.exist_identities[id]['identities']['$identity_email']
-            ret['identities']['$identity_taobao_ouid'] = self.exist_identities[id]['identities'][
-                '$identity_taobao_ouid']
+            ret['identities']['$identity_login_id'] = exist_identity['identities']['$identity_login_id']
+            ret['identities']['$identity_cookie_id'] = exist_identity['identities']['$identity_cookie_id']
+            ret['identities']['$identity_mobile'] = exist_identity['identities']['$identity_mobile']
+            ret['identities']['$identity_idfv'] = exist_identity['identities']['$identity_idfv']
+            ret['identities']['$identity_email'] = exist_identity['identities']['$identity_email']
+            ret['identities']['$identity_taobao_ouid'] = exist_identity['identities']['$identity_taobao_ouid']
         elif self.idm_version == 'id3' and is_old_user is False:
             ret['identities'] = {}
             ret['identities']['$identity_login_id'] = 'login_id_' + random_uuid + current_timestamp
@@ -90,7 +107,7 @@ class ProfileSetGenerator:
         ret['type'] = "profile_set"
         return ret
 
-    def filter_identiy_info(self, row):
-        print(f"row {row}")
+    def filter_identity_info(self, row):
         del row['properties']
+        del row['type']
         return row

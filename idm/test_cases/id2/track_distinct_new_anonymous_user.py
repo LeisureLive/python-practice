@@ -10,7 +10,7 @@ false = False
 true = True
 
 
-class IdmProfileSetV2DistinctNewAnonymousUserCase(TestCase):
+class IdmTrackV2DistinctNewAnonymousUserCase(TestCase):
 
     def __init__(self, build_user, identification):
         super().__init__()
@@ -20,17 +20,17 @@ class IdmProfileSetV2DistinctNewAnonymousUserCase(TestCase):
         self.new_user_percent = 1.0
         self.device_id_list_size = 1
         self.input_file_dir = ""
-        self.output_file_dir = "profile_set_v2_anonymous_user_{}_{}".format(build_user, identification)
+        self.output_file_dir = ""
         self.cost = 0
 
     def do_test(self, exec_ip, ips, project, count):
-        print("开始导入 profile_set(匿名新用户 125 个属性 version=2.0) 数据, 数据量={}".format(count))
-        start_spark_job(exec_ip, self.work_path, self.script_path, "IdmProfileSetV2DistinctNewAnonymousUserCase", 'id2',
-                        ips, project, count, 0, self.login_percent, self.new_user_percent, self.device_id_list_size,
+        print("开始导入 track(匿名新用户 25 个属性 version=2.0) 数据, 数据量={}".format(count))
+        start_spark_job(exec_ip, self.work_path, self.script_path, "IdmTrackV2DistinctNewAnonymousUserCase", 'id2', ips,
+                        project, 0, count, self.login_percent, self.new_user_percent, self.device_id_list_size,
                         self.input_file_dir, self.output_file_dir)
-        print("导入 profile_set(匿名新用户, 125 个属性 version=2.0) 数据完成, 数据量={}".format(count))
+        print("导入 track(匿名新用户, 25 个属性 version=2.0) 数据完成, 数据量={}".format(count))
 
     def collect_qps(self, exec_ip, data_count):
         qps_detail = collect_sdi_qps(exec_ip, data_count)
-        qps_detail['title'] = "profile_set (匿名新用户, 125个属性)"
+        qps_detail['title'] = "track (匿名新用户, 25个属性)"
         return qps_detail

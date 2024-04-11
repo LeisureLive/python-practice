@@ -124,6 +124,9 @@ def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type,
                      'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
                      .format(project_name, project_name))
         time.sleep(5)
+        exec_command(ip,
+                     'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t back_to_cmpt_one"'
+                     .format(project_name))
         if idm_mode == 'id2':
             if idm_engine_type == 'default':
                 exec_command(ip,
@@ -150,7 +153,7 @@ def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type,
             # 开启多对一
             exec_command(ip,
                          'su - sa_cluster -c "sbpadmin project update -n {} --enable-new-signup"'
-                         .format(project_name, project_name))
+                         .format(project_name))
         elif idm_mode == 'id3':
             exec_command(ip,
                          'su - sa_cluster -c "sdfadmin enable_id_mapping_v3 change_to_v3 -p {} -r "'
@@ -164,6 +167,20 @@ def open_idm_optimize_trigger(ip, env_version, skip_init):
         open_idm_optimize_trigger_in_new_env(ip)
     else:
         open_idm_optimize_trigger_in_old_env(ip)
+
+def optimize_kafka(ip, env_version, skip_init):
+    if skip_init:
+        return
+    if env_version == 'new':
+        exec_command_and_check(ip,
+                               "su - sa_cluster -c 'kafka-configs --zookeeper localhost:2181  --alter --entity-name integrator_input_topic --entity-type topics --add-config retention.ms=72000000' ")
+        exec_command_and_check(ip,
+                               "su - sa_cluster -c 'kafka-configs --zookeeper localhost:2181  --alter --entity-name event_topic --entity-type topics --add-config retention.ms=72000000' ")
+        exec_command_and_check(ip,
+                               "su - sa_cluster -c 'kafka-configs --zookeeper localhost:2181  --alter --entity-name horizon_stream_profile_command_topic --entity-type topics --add-config retention.ms=21600000' ")
+    else:
+        exec_command_and_check(ip,
+                               "su - sa_cluster -c 'kafka-configs --zookeeper localhost:2181  --alter --entity-name sdf_input_topic --entity-type topics --add-config retention.ms=72000000' ")
 
 
 def open_idm_optimize_trigger_in_new_env(ip):
@@ -393,7 +410,7 @@ def start_module(ip, product, module):
 
 def check_sdi_exists_latency(ip):
     result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency"')
-    if result.__contains__("don't exist latency"):
+    if result.__contains__("don't exist latency") or get_sdi_latency_total_size(result) < 10:
         print("检测 sdi 无延迟")
         return False
     else:
@@ -507,7 +524,6 @@ def import_api(gzipType, dataType, jsonString, server):
     s = requests.session()
     s.keep_alive = False
     response = requests.post(server, data=payload, headers=headers)
-    print(response)
 
 
 def dealwith(gzipType, jsonString):

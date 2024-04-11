@@ -5,14 +5,28 @@ import time
 
 import requests
 
-from idm.test_cases.id2.profile_set_distinct_new_anonymous_user import IdmProfileSetV2DistinctNewUserCase
+sys.path.append('../')
+from idm.test_cases.id2.profile_set_distinct_new_anonymous_user import IdmProfileSetV2DistinctNewAnonymousUserCase
+from idm.test_cases.id2.profile_set_distinct_new_login_user import IdmProfileSetV2DistinctNewLoginUserCase
+from idm.test_cases.id2.profile_set_distinct_old_anonymous_user import IdmProfileSetV2DistinctOldAnonymousUserCase
+from idm.test_cases.id2.profile_set_distinct_old_login_user import IdmProfileSetV2DistinctOldLoginUserCase
+from idm.test_cases.id2.profile_track_mixed_distinct_user import IdmProfileTrackMixedUserCase
+from idm.test_cases.id2.track_distinct_new_anonymous_user import IdmTrackV2DistinctNewAnonymousUserCase
+from idm.test_cases.id2.track_distinct_old_anonymous_user import IdmTrackV2DistinctOldAnonymousUserCase
+from idm.test_cases.id2.track_old_anonymous_user_bind_loginid import IdmTrackAnonymousUserBindLoginIdCase
+from idm.test_cases.id2.track_old_multi_login_user_only_with_anonymousid import \
+    IdmTrackMultiLoginUserOnlyWithAnonymousIdCase
+from idm.test_cases.id3.profile_set_distinct_new_user import IdmProfileSetV3DistinctNewUserCase
+from idm.test_cases.id3.profile_set_distinct_old_user import IdmProfileSetV3DistinctOldUserCase
+from idm.test_cases.id3.profile_track_mixed_distinct_user import IdmProfileTrackV3MixedDistinctUserCase
+from idm.test_cases.id3.track_distinct_new_user import IdmTrackV3DistinctNewUserCase
+from idm.test_cases.id3.track_distinct_old_user import IdmTrackV3DistinctOldUserCase
 from idm.tools.common_tools import get_ips_from_hosts, get_env_version, optimize_skv, open_idm_optimize_trigger, \
     create_new_project, start_handler, \
-    check_is_cluster, get_sdi_version, get_horizon_version, get_sdf_version
+    check_is_cluster, get_sdi_version, get_horizon_version, get_sdf_version, pause_import_and_wait_consume_latency, \
+    start_import_and_pause_handler, optimize_kafka
 from idm.tools.email_tool import send_benchmark_result
-from idm.tools.spark_job import install_spark, send_code, install_requests
-
-sys.path.append('..')
+from idm.tools.spark_job import install_spark, send_code, install_requests, clear_hdfs_dir
 
 global id2_project_qps_list
 global id3_project_qps_list
@@ -125,9 +139,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-build_url', type=str, default=None, help='build_url')
     parser.add_argument('-build_user_id', type=str, default='hejie', help='build_user_id')
-    parser.add_argument('-ip', type=str, default='10.129.24.40', help='ip')
+    parser.add_argument('-ip', type=str, default='10.129.27.154', help='ip')
     parser.add_argument('-webhook', type=str, default='', help='webhook')
-    parser.add_argument('-id2_mode_data_count', type=int, default=100, help='id2_mode_data_count')
+    parser.add_argument('-id2_mode_data_count', type=int, default=0, help='id2_mode_data_count')
     parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
     parser.add_argument('-mock_idm_data_count', type=int, default=0, help='mock_idm_data_count')
     parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2', help='id2_mode_project_name')
@@ -161,39 +175,66 @@ if __name__ == '__main__':
     optimize_skv(ip, skip_init)
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
     open_idm_optimize_trigger(ip, env_version, skip_init)
+    optimize_kafka(ip, env_version, skip_init)
     # 3、初始化 spark 运行环境
     work_path = "/home/sa_cluster/import_data_benchmark"
     script_dir = "daily_build_data_gen"
     install_requests(ip_list)
     install_spark(ip, work_path, script_dir)
     send_code(ip, work_path, script_dir)
+    clear_hdfs_dir(ip)
     # 4、对 id2 项目进行测试
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        project_name = args.id2_mode_project_name
-        create_new_project(ip, env_version, project_name, 'id2', idm_engine_type, skip_init)
+        create_new_project(ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
         identification = str(int(time.time() * 1000))
         test_cases = [
-            IdmProfileSetV2DistinctNewUserCase(args.build_user_id, identification)
+            IdmProfileSetV2DistinctNewAnonymousUserCase(args.build_user_id, identification),
+            IdmProfileSetV2DistinctOldAnonymousUserCase(args.build_user_id, identification),
+            IdmProfileSetV2DistinctNewLoginUserCase(args.build_user_id, identification),
+            IdmProfileSetV2DistinctOldLoginUserCase(args.build_user_id, identification),
+            IdmTrackV2DistinctNewAnonymousUserCase(args.build_user_id, identification),
+            IdmTrackV2DistinctOldAnonymousUserCase(args.build_user_id, identification),
+            IdmProfileTrackMixedUserCase(args.build_user_id, identification),
+            IdmTrackAnonymousUserBindLoginIdCase(args.build_user_id, identification),
+            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(args.build_user_id, identification)
         ]
 
+        pause_import_and_wait_consume_latency(ip, env_version)
         for test_case in test_cases:
-            if import_mode != "chain":
-                test_case.do_import_test(ip, project_name, id2_mode_data_count, import_mode)
-                id2_project_qps_list.append(test_case.collect_import_qps(id2_mode_data_count))
-            else:
-                # pause_import_and_wait_consume_latency(exec_ip, env_version)
-                # start_import_and_pause_handler(exec_ip, env_version)
-                test_case.do_test(ip, ",".join(ip_list), project_name, id2_mode_data_count)
-                start_handler(ip, env_version)
-                id2_project_qps_list.append(test_case.collect_qps(ip, id2_mode_data_count))
+            start_import_and_pause_handler(ip, env_version)
+            test_case.do_test(ip, ",".join(ip_list), id2_mode_project_name, id2_mode_data_count)
+            start_handler(ip, env_version)
+            id2_project_qps_list.append(test_case.collect_qps(ip, id2_mode_data_count))
 
+    # 5、对 id3 项目进行测试
+    id3_project_qps_list = []
+    if id3_mode_data_count > 0:
+        create_new_project(ip, env_version, id3_mode_project_name, 'id3', idm_engine_type, skip_init)
+        identification = str(int(time.time() * 1000))
+        test_cases = [
+            IdmProfileSetV3DistinctNewUserCase(args.build_user_id, identification),
+            IdmProfileSetV3DistinctOldUserCase(args.build_user_id, identification),
+            IdmTrackV3DistinctNewUserCase(args.build_user_id, identification),
+            IdmTrackV3DistinctOldUserCase(args.build_user_id, identification),
+            IdmProfileTrackV3MixedDistinctUserCase(args.build_user_id, identification)
+        ]
+
+        pause_import_and_wait_consume_latency(ip, env_version)
+        for test_case in test_cases:
+            start_import_and_pause_handler(ip, env_version)
+            test_case.do_test(ip, ",".join(ip_list), id3_mode_project_name, id3_mode_data_count)
+            start_handler(ip, env_version)
+            id3_project_qps_list.append(test_case.collect_qps(ip, id3_mode_data_count))
+
+    # 6、mock idm 进行性能测试
+    mock_idm_case_qps_list = []
     # 7、推送结果
     if args.result_delivery_method.__contains__('email'):
         send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
-                              mock_idm_case_qps_list,
-                              'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH', args.receiver_emails)
-    elif args.result_delivery_method.__contains__('push'):
+                              mock_idm_case_qps_list, 'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH',
+                              args.receiver_emails)
+    if args.result_delivery_method.__contains__('push'):
         push_result(ip_list, env_version, idm_engine_type, args.build_user_id, args.build_url, args.webhook,
                     import_mode)

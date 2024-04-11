@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 
 from idm.tools.common_tools import exec_command_and_check, exec_command, cp_to
 
@@ -16,6 +17,12 @@ def install_spark(ip, work_path, script_dir):
                                f"su - sa_cluster -c 'cd {work_path} && wget http://download.sensorsdata.cn/dragon/artifactory/dragon-release/com.sensorsdata.sps/dlc_spark3/dlc_spark3-1.0.0.2.tar' ")
     if "dlc_spark3" not in packages:
         exec_command_and_check(ip, f"su - sa_cluster -c 'cd {work_path} && tar -xf dlc_spark3-1.0.0.2.tar' ")
+    # 启动yarn
+    exec_command_and_check(ip, "su - sa_cluster -c 'mothershipadmin start -m yarn' ")
+
+
+def clear_hdfs_dir(ip):
+    exec_command_and_check(ip, "su - sa_cluster -c 'hdfs dfs -rm -r -f /sa/runtime/import_data_daily_benchmark' ")
 
 
 def install_requests(ip_list):
@@ -38,13 +45,14 @@ def send_code(ip, work_path, script_dir):
 
 
 def start_spark_job(exec_ip, work_path, script_path, job_name, idm_version, ips, project, user_count, event_count,
-                    login_percent, new_user_percent, input_file_dir, output_file_dir):
+                    login_percent, new_user_percent, device_id_list_size, input_file_dir, output_file_dir):
     hdfs_file_dir = "hdfs:///sa/runtime/import_data_daily_benchmark"
     input_file_dir = hdfs_file_dir + "/" + input_file_dir
     output_file_dir = hdfs_file_dir + "/" + output_file_dir
     # 创建数据目录
     exec_command_and_check(exec_ip, f"su - sa_cluster -c 'hdfs dfs -mkdir -p {hdfs_file_dir}' ")
     kill_running_job(exec_ip, job_name)
+    job_name = job_name + str(int(time.time() * 1000))
     spark_submit_cmd = f''' su - sa_cluster -c ' 
     export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
     export PYSPARK_PYTHON=/usr/bin/python3 && \
@@ -66,6 +74,7 @@ def start_spark_job(exec_ip, work_path, script_path, job_name, idm_version, ips,
       -event_count {event_count} \
       -login_percent {login_percent} \
       -new_user_percent {new_user_percent} \
+      -device_id_list_size {device_id_list_size} \
       -input_file_path {input_file_dir} \
       -output_file_path {output_file_dir} \
        >> gen_data.log 2>&1 '

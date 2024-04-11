@@ -12,6 +12,10 @@ class DataSender:
     def __init__(self, server_list):
         self.server_list = server_list
 
+    def send_to_import_api(self, data):
+        self.import_api(1, 0, data, self.server_list[random.randint(0, len(self.server_list) - 1)])
+        return data
+
     def batch_send_to_import_api(self, partition):
         batch_size = 100
         batch = []
