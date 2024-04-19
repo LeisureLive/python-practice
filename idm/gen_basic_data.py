@@ -74,11 +74,11 @@ def send_code(ip, work_path, script_dir):
 
 def start_spark_job(args, work_path, script_dir):
     # 创建数据目录
-    exec_command_and_check(args.ip, f"hdfs dfs -mkdir -p {args.data_path}")
+    exec_command_and_check(args.target_ip, f"hdfs dfs -mkdir -p {args.data_path}")
     # 检查是否有任务正在跑
     job_name_prefix = "gen_basic_data_spark_job"
     job_name = job_name_prefix + str(int(time.time() * 1000))
-    kill_running_job(args.ip, job_name_prefix)
+    kill_running_job(args.target_ip, job_name_prefix)
     # 产出数据
     spark_submit_cmd = f'''
 export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
@@ -103,8 +103,8 @@ cd {work_path} && \
   -event_login_count {args.event_login_count} \
   -event_mixed_count {args.event_mixed_count} >> gen_data.log 2>&1
 '''
-    exec_command_and_check(args.ip, spark_submit_cmd)
-    if not check_job_status(args.ip, job_name):
+    exec_command_and_check(args.target_ip, spark_submit_cmd)
+    if not check_job_status(args.target_ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
 
 
@@ -124,13 +124,13 @@ def process(args):
     result = "构造成功！"
     start_time = time.time()
     try:
-        install_spark(args.ip, work_path, script_dir)
+        install_spark(args.target_ip, work_path, script_dir)
         # 把代码传到机器上
-        send_code(args.ip, work_path, script_dir)
+        send_code(args.target_ip, work_path, script_dir)
         # 开始造数据任务
         start_spark_job(args, work_path, script_dir)
         # 开始创建表
-        create_table(args.ip, args.data_path, work_path + "/" + script_dir)
+        create_table(args.target_ip, args.data_path, work_path + "/" + script_dir)
     except Exception as e:
         print(str(e))
         result = f"出现异常: {str(e)}"
@@ -154,7 +154,7 @@ def push_result(args, result):
 def build_common_msg(args, result):
     msg = "【基础数据构造工具】"
     msg += "\n" + f"【tag: {args.tag}】"
-    msg += "\n" + f"【ip: {args.ip}】"
+    msg += "\n" + f"【ip: {args.target_ip}】"
     msg += "\n" + f"【并行度: {args.parallel}】"
     msg += "\n" + f"【importer 导入历史用户量: {args.user_count}】"
     msg += "\n" + f"【login 事件量: {args.event_login_count}】"

@@ -12,23 +12,18 @@ true = True
 
 class IdmTrackAnonymousUserBindLoginIdCase(TestCase):
 
-    def __init__(self, build_user, identification):
+    def __init__(self, idm_engine_type):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        # 多对一绑定的设备id个数
-        self.device_id_list_size = 2
-        self.login_percent = 1.0
-        self.new_user_percent = 0.0
-        self.input_file_dir = "profile_set_v2_anonymous_user_{}_{}".format(build_user, identification)
-        self.output_file_dir = "track_v2_login_multi_user_{}_{}.json".format(build_user, identification)
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/{idm_engine_type}/id2/anonymous_bind_login_track"
+        self.data_type = "track"
         self.cost = 0
 
-    def do_test(self, exec_ip, ips, project, count):
+    def do_test(self, basic_data_ip, target_ips, project, count):
         print("开始导入 track(匿名老用户绑定同一登录 id version=2.0) 数据, 数据量={}".format(count))
-        start_spark_job(exec_ip, self.work_path, self.script_path, "IdmTrackAnonymousUserBindLoginIdCase", 'id2', ips,
-                        project, 0, count, self.login_percent, self.new_user_percent, self.device_id_list_size,
-                        self.input_file_dir, self.output_file_dir)
+        start_spark_job(basic_data_ip, self.work_path, self.script_path, "IdmTrackAnonymousUserBindLoginIdCase", 'id2',
+                        target_ips, project, self.basic_data_path, self.data_type)
         print("导入 track(匿名老用户绑定同一登录 id version=2.0)  数据完成, 数据量={}".format(count))
 
     def collect_qps(self, exec_ip, data_count):

@@ -25,7 +25,7 @@ def process(param):
     work_path = "/home/sa_cluster/mock_data"
     script_dir = "data_gen"
     skip_init = param.skip_init == "true"
-    exec_ip = param.ip
+    exec_ip = param.target_ip
     project = param.project
     env_version = common_tools.get_env_version(exec_ip)
     try:
@@ -43,8 +43,8 @@ def process(param):
         # profile_set_file = gen_data_file(param.ip, param.id_mode, "profile_set", "where login_id is not null")
         # track_file = gen_data_file(param.ip, param.id_mode, "track", "")
         # 5、开始导入
-        profile_set_result = exec_importer(param.ip, param.project, profile_set_file)
-        track_result = exec_importer(param.ip, param.project, track_file)
+        profile_set_result = exec_importer(param.target_ip, param.project, profile_set_file)
+        track_result = exec_importer(param.target_ip, param.project, track_file)
         result = build_result(profile_set_result, track_result)
     except Exception as e:
         print(str(e))
@@ -63,11 +63,11 @@ def start_spark_job(args, work_path, script_dir, data_type):
         data_path = f"{args.data_path}/event_login_data"
 
     # 创建数据目录
-    exec_command_and_check(args.ip, f"hdfs dfs -mkdir -p {output_path}")
+    exec_command_and_check(args.target_ip, f"hdfs dfs -mkdir -p {output_path}")
     # 检查是否有任务正在跑
     job_name_prefix = "convert_basic_data_spark_job"
     job_name = job_name_prefix + str(int(time.time() * 1000))
-    gen_basic_data.kill_running_job(args.ip, job_name_prefix)
+    gen_basic_data.kill_running_job(args.target_ip, job_name_prefix)
     # 产出数据
     spark_submit_cmd = f'''
 export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
@@ -90,8 +90,8 @@ cd {work_path} && \
   -output_path {output_path} \
    >> gen_data.log 2>&1
 '''
-    exec_command_and_check(args.ip, spark_submit_cmd)
-    if not gen_basic_data.check_job_status(args.ip, job_name):
+    exec_command_and_check(args.target_ip, spark_submit_cmd)
+    if not gen_basic_data.check_job_status(args.target_ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
     return output_path
 
@@ -132,7 +132,7 @@ def push_result(args, result):
 def build_common_msg(args, result):
     msg = "【数据接入场景测试-批导入】"
     msg += "\n" + f"【tag: {args.tag}】"
-    msg += "\n" + f"【ip: {args.ip}】"
+    msg += "\n" + f"【ip: {args.target_ip}】"
     msg += "\n" + f"【id_mode: {args.id_mode}】"
     msg += "\n" + f"【idm_engine_type: {args.idm_engine_type}】"
     msg += "\n" + result

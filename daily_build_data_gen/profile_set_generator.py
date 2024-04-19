@@ -1,5 +1,4 @@
 import sys
-import time
 import uuid
 
 from daily_build_data_gen.data_type import DataType
@@ -19,7 +18,8 @@ class ProfileSetGenerator:
         DataType.LIST: 5
     }
 
-    def __init__(self, idm_version, count, login_percent, new_user_percent, device_id_list_size, exist_identities) -> None:
+    def __init__(self, idm_version, count, login_percent, new_user_percent, device_id_list_size,
+                 exist_identities) -> None:
         super().__init__()
         self.login_user_max_id = int(int(count) * login_percent)
         self.login_new_user_max_id = int(self.login_user_max_id * new_user_percent)
@@ -44,14 +44,13 @@ class ProfileSetGenerator:
         if len(self.exist_identities) > 0:
             index = id % len(self.exist_identities)
         random_uuid = str(uuid.uuid4())
-        current_timestamp = str(int(time.time() * 1000))
         is_old_user = False
         # 填充 distinct_id
         if id < self.login_new_user_max_id:
             # 登录新用户
-            ret['login_id'] = 'login_id_' + random_uuid + current_timestamp
-            ret['distinct_id'] = 'login_id_' + random_uuid + current_timestamp
-            ret['anonymous_id'] = 'device_' + random_uuid + current_timestamp
+            ret['login_id'] = 'login_id_' + random_uuid
+            ret['distinct_id'] = 'login_id_' + random_uuid
+            ret['anonymous_id'] = 'device_' + random_uuid
         elif id < self.login_user_max_id:
             # 登录老用户
             exist_identity = self.exist_identities[index]
@@ -69,13 +68,12 @@ class ProfileSetGenerator:
             is_old_user = True
         elif id < self.not_login_new_user_max_id:
             # 匿名新用户
-            ret['distinct_id'] = 'device_' + random_uuid + current_timestamp
+            ret['distinct_id'] = 'device_' + random_uuid
+            ret['anonymous_id'] = 'device_' + random_uuid
         else:
             # 匿名老用户
-            if 'anonymous_id' in self.exist_identities[index]:
-                ret['distinct_id'] = self.exist_identities[index]['anonymous_id']
-            else:
-                ret['distinct_id'] = self.exist_identities[index]['distinct_id']
+            ret['distinct_id'] = self.exist_identities[index]['distinct_id']
+            ret['anonymous_id'] = self.exist_identities[index]['anonymous_id']
             is_old_user = True
 
         # 填充 identity
@@ -90,12 +88,12 @@ class ProfileSetGenerator:
             ret['identities']['$identity_taobao_ouid'] = exist_identity['identities']['$identity_taobao_ouid']
         elif self.idm_version == 'id3' and is_old_user is False:
             ret['identities'] = {}
-            ret['identities']['$identity_login_id'] = 'login_id_' + random_uuid + current_timestamp
-            ret['identities']['$identity_cookie_id'] = 'cookie_id_' + random_uuid + current_timestamp
-            ret['identities']['$identity_mobile'] = 'mobile_' + random_uuid + current_timestamp
-            ret['identities']['$identity_idfv'] = 'device_' + random_uuid + current_timestamp
-            ret['identities']['$identity_email'] = 'email_' + random_uuid + current_timestamp
-            ret['identities']['$identity_taobao_ouid'] = 'taobao_ouid_' + random_uuid + current_timestamp
+            ret['identities']['$identity_login_id'] = 'login_id_' + random_uuid
+            ret['identities']['$identity_cookie_id'] = 'cookie_id_' + random_uuid
+            ret['identities']['$identity_mobile'] = 'mobile_' + random_uuid
+            ret['identities']['$identity_idfv'] = 'device_' + random_uuid
+            ret['identities']['$identity_email'] = 'email_' + random_uuid
+            ret['identities']['$identity_taobao_ouid'] = 'taobao_ouid_' + random_uuid
 
         # 填充 properties
         properties = {}

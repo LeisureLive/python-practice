@@ -1,7 +1,7 @@
 import argparse
+import datetime
 import json
 import sys
-import time
 
 import requests
 
@@ -26,7 +26,7 @@ from idm.tools.common_tools import get_ips_from_hosts, get_env_version, optimize
     check_is_cluster, get_sdi_version, get_horizon_version, get_sdf_version, pause_import_and_wait_consume_latency, \
     start_import_and_pause_handler, optimize_kafka
 from idm.tools.email_tool import send_benchmark_result
-from idm.tools.spark_job import install_spark, send_code, install_requests, clear_hdfs_dir
+from idm.tools.spark_job import install_spark, send_code, install_requests
 
 global id2_project_qps_list
 global id3_project_qps_list
@@ -139,16 +139,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-build_url', type=str, default=None, help='build_url')
     parser.add_argument('-build_user_id', type=str, default='hejie', help='build_user_id')
-    parser.add_argument('-ip', type=str, default='10.129.27.154', help='ip')
+    parser.add_argument('-basic_data_ip', type=str, default='10.129.23.220', help='basic data storage ip')
+    parser.add_argument('-target_ip', type=str, default='10.129.29.153', help='target ip')
     parser.add_argument('-webhook', type=str, default='', help='webhook')
     parser.add_argument('-id2_mode_data_count', type=int, default=0, help='id2_mode_data_count')
-    parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
+    parser.add_argument('-id3_mode_data_count', type=int, default=1000, help='id3_mode_data_count')
     parser.add_argument('-mock_idm_data_count', type=int, default=0, help='mock_idm_data_count')
-    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2', help='id2_mode_project_name')
-    parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3', help='id3_mode_project_name')
+    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2_new', help='id2_mode_project_name')
+    parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3_new', help='id3_mode_project_name')
     parser.add_argument('-mock_idm_project_name', type=str, default='benchmark_mock_idm', help='mock_idm_project_name')
     parser.add_argument('-idm_engine_type', type=str, default='default', help='default/fast_mode')
-    parser.add_argument('-skip_init', type=str, default="true", help='跳过开关、项目初始化')
+    parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
     parser.add_argument('-import_mode', type=str, default="chain",
                         help='导入模式：chain / hdfs_importer / importer / importer_v2')
     parser.add_argument('-result_delivery_method', type=str, default="push",
@@ -157,84 +158,88 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # 0、解析参数
-    ip = args.ip
+    target_ip = args.target_ip
+    basic_data_ip = args.basic_data_ip
     skip_init = args.skip_init == "true"
     import_mode = args.import_mode
-    ip_list = get_ips_from_hosts(ip)
-    print("ip_list = %s" % ip_list)
+    target_ip_list = get_ips_from_hosts(target_ip)
+    print("target_ip_list = %s" % target_ip_list)
+    basic_data_ip_list = get_ips_from_hosts(basic_data_ip)
+    print("basic_data_ip_list = %s" % target_ip_list)
     id2_mode_data_count = args.id2_mode_data_count
     id3_mode_data_count = args.id3_mode_data_count
     mock_idm_data_count = args.mock_idm_data_count
     idm_engine_type = args.idm_engine_type
-    id2_mode_project_name = args.id2_mode_project_name + "_" + idm_engine_type
-    id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type
-    mock_idm_project_name = args.mock_idm_project_name + "_" + idm_engine_type
-    env_version = get_env_version(ip)
+
+    id2_mode_project_name = args.id2_mode_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
+        "%Y_%m_%d")
+    id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
+        "%Y_%m_%d")
+    mock_idm_project_name = args.mock_idm_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
+        "%Y_%m_%d")
+    env_version = get_env_version(target_ip)
 
     # 1、对 skv 内存进行调优
-    optimize_skv(ip, skip_init)
+    optimize_skv(target_ip, skip_init)
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
-    open_idm_optimize_trigger(ip, env_version, skip_init)
-    optimize_kafka(ip, env_version, skip_init)
+    open_idm_optimize_trigger(target_ip, env_version, skip_init)
+    optimize_kafka(target_ip, env_version, skip_init)
     # 3、初始化 spark 运行环境
     work_path = "/home/sa_cluster/import_data_benchmark"
     script_dir = "daily_build_data_gen"
-    install_requests(ip_list)
-    install_spark(ip, work_path, script_dir)
-    send_code(ip, work_path, script_dir)
-    clear_hdfs_dir(ip)
+    install_requests(basic_data_ip_list)
+    install_spark(basic_data_ip, work_path, script_dir)
+    send_code(basic_data_ip, work_path, script_dir)
     # 4、对 id2 项目进行测试
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        create_new_project(ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
-        identification = str(int(time.time() * 1000))
+        create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
         test_cases = [
-            IdmProfileSetV2DistinctNewAnonymousUserCase(args.build_user_id, identification),
-            IdmProfileSetV2DistinctOldAnonymousUserCase(args.build_user_id, identification),
-            IdmProfileSetV2DistinctNewLoginUserCase(args.build_user_id, identification),
-            IdmProfileSetV2DistinctOldLoginUserCase(args.build_user_id, identification),
-            IdmTrackV2DistinctNewAnonymousUserCase(args.build_user_id, identification),
-            IdmTrackV2DistinctOldAnonymousUserCase(args.build_user_id, identification),
-            IdmProfileTrackMixedUserCase(args.build_user_id, identification),
-            IdmTrackAnonymousUserBindLoginIdCase(args.build_user_id, identification),
-            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(args.build_user_id, identification)
+            IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
+            IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
+            IdmProfileSetV2DistinctNewLoginUserCase(idm_engine_type),
+            IdmProfileSetV2DistinctOldLoginUserCase(idm_engine_type),
+            IdmTrackV2DistinctNewAnonymousUserCase(idm_engine_type),
+            IdmTrackV2DistinctOldAnonymousUserCase(idm_engine_type),
+            IdmProfileTrackMixedUserCase(idm_engine_type),
+            IdmTrackAnonymousUserBindLoginIdCase(idm_engine_type),
+            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(idm_engine_type)
         ]
 
-        pause_import_and_wait_consume_latency(ip, env_version)
+        pause_import_and_wait_consume_latency(target_ip, env_version)
         for test_case in test_cases:
-            start_import_and_pause_handler(ip, env_version)
-            test_case.do_test(ip, ",".join(ip_list), id2_mode_project_name, id2_mode_data_count)
-            start_handler(ip, env_version)
-            id2_project_qps_list.append(test_case.collect_qps(ip, id2_mode_data_count))
+            start_import_and_pause_handler(target_ip, env_version)
+            test_case.do_test(basic_data_ip, ",".join(target_ip_list), id2_mode_project_name, id2_mode_data_count)
+            start_handler(target_ip, env_version)
+            id2_project_qps_list.append(test_case.collect_qps(target_ip, id2_mode_data_count))
 
     # 5、对 id3 项目进行测试
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
-        create_new_project(ip, env_version, id3_mode_project_name, 'id3', idm_engine_type, skip_init)
-        identification = str(int(time.time() * 1000))
+        create_new_project(target_ip, env_version, id3_mode_project_name, 'id3', idm_engine_type, skip_init)
         test_cases = [
-            IdmProfileSetV3DistinctNewUserCase(args.build_user_id, identification),
-            IdmProfileSetV3DistinctOldUserCase(args.build_user_id, identification),
-            IdmTrackV3DistinctNewUserCase(args.build_user_id, identification),
-            IdmTrackV3DistinctOldUserCase(args.build_user_id, identification),
-            IdmProfileTrackV3MixedDistinctUserCase(args.build_user_id, identification)
+            IdmProfileSetV3DistinctNewUserCase(idm_engine_type),
+            IdmProfileSetV3DistinctOldUserCase(idm_engine_type),
+            IdmTrackV3DistinctNewUserCase(idm_engine_type),
+            IdmTrackV3DistinctOldUserCase(idm_engine_type),
+            IdmProfileTrackV3MixedDistinctUserCase(idm_engine_type)
         ]
 
-        pause_import_and_wait_consume_latency(ip, env_version)
+        pause_import_and_wait_consume_latency(target_ip, env_version)
         for test_case in test_cases:
-            start_import_and_pause_handler(ip, env_version)
-            test_case.do_test(ip, ",".join(ip_list), id3_mode_project_name, id3_mode_data_count)
-            start_handler(ip, env_version)
-            id3_project_qps_list.append(test_case.collect_qps(ip, id3_mode_data_count))
+            start_import_and_pause_handler(target_ip, env_version)
+            test_case.do_test(basic_data_ip, ",".join(target_ip_list), id3_mode_project_name, id3_mode_data_count)
+            start_handler(target_ip, env_version)
+            id3_project_qps_list.append(test_case.collect_qps(target_ip, id3_mode_data_count))
 
     # 6、mock idm 进行性能测试
     mock_idm_case_qps_list = []
     # 7、推送结果
     if args.result_delivery_method.__contains__('email'):
-        send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
+        send_benchmark_result(target_ip_list, env_version, idm_engine_type, id2_project_qps_list, id3_project_qps_list,
                               mock_idm_case_qps_list, 'enjoyleisure8027@163.com', 'HSUJWIYVQGDMFXDH',
                               args.receiver_emails)
     if args.result_delivery_method.__contains__('push'):
-        push_result(ip_list, env_version, idm_engine_type, args.build_user_id, args.build_url, args.webhook,
+        push_result(target_ip_list, env_version, idm_engine_type, args.build_user_id, args.build_url, args.webhook,
                     import_mode)

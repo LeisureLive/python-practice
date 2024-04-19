@@ -44,14 +44,10 @@ def send_code(ip, work_path, script_dir):
             cp_to(ip, f"{script_bin_dir}/{script_dir}/{file}", f"{work_path}/{script_dir}/{file}")
 
 
-def start_spark_job(exec_ip, work_path, script_path, job_name, idm_version, ips, project, user_count, event_count,
-                    login_percent, new_user_percent, device_id_list_size, input_file_dir, output_file_dir):
-    hdfs_file_dir = "hdfs:///sa/runtime/import_data_daily_benchmark"
-    input_file_dir = hdfs_file_dir + "/" + input_file_dir
-    output_file_dir = hdfs_file_dir + "/" + output_file_dir
+def start_spark_job(basic_data_ip, work_path, script_path, job_name, idm_version, target_ips, project, basic_data_path,
+                    data_type):
     # 创建数据目录
-    exec_command_and_check(exec_ip, f"su - sa_cluster -c 'hdfs dfs -mkdir -p {hdfs_file_dir}' ")
-    kill_running_job(exec_ip, job_name)
+    kill_running_job(basic_data_ip, job_name)
     job_name = job_name + str(int(time.time() * 1000))
     spark_submit_cmd = f''' su - sa_cluster -c ' 
     export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
@@ -63,26 +59,20 @@ def start_spark_job(exec_ip, work_path, script_path, job_name, idm_version, ips,
       --deploy-mode client \
       --executor-memory "2G"  \
       --driver-memory "1G" \
-      --num-executors "10" \
+      --num-executors "12" \
       --executor-cores "2" \
       --py-files daily_build_data_gen.zip \
       {script_path}/generate_import_data.py \
       -idm_version {idm_version} \
-      -ips "{ips}" \
+      -target_ips "{target_ips}" \
       -project "{project}" \
-      -user_count {user_count} \
-      -event_count {event_count} \
-      -login_percent {login_percent} \
-      -new_user_percent {new_user_percent} \
-      -device_id_list_size {device_id_list_size} \
-      -input_file_path {input_file_dir} \
-      -output_file_path {output_file_dir} \
+      -basic_data_path {basic_data_path} \
+      -data_type {data_type} \
        >> gen_data.log 2>&1 '
     '''
-    exec_command_and_check(exec_ip, spark_submit_cmd)
-    if not check_job_status(exec_ip, job_name):
+    exec_command_and_check(basic_data_ip, spark_submit_cmd)
+    if not check_job_status(basic_data_ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
-    return output_file_dir
 
 
 def kill_running_job(ip, job_name_prefix):
