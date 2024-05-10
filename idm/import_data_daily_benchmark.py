@@ -24,7 +24,7 @@ from idm.test_cases.id3.track_distinct_old_user import IdmTrackV3DistinctOldUser
 from idm.tools.common_tools import get_ips_from_hosts, get_env_version, optimize_skv, open_idm_optimize_trigger, \
     create_new_project, start_handler, \
     check_is_cluster, get_sdi_version, get_horizon_version, get_sdf_version, pause_import_and_wait_consume_latency, \
-    start_import_and_pause_handler, optimize_kafka
+    start_import_and_pause_handler, optimize_kafka, balance_skv
 from idm.tools.email_tool import send_benchmark_result
 from idm.tools.spark_job import install_spark, send_code, install_requests
 
@@ -195,6 +195,8 @@ if __name__ == '__main__':
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
         create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
+        # 尝试执行 skv balance, 避免数据不均衡
+        balance_skv(target_ip)
         test_cases = [
             IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
             IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
@@ -218,6 +220,8 @@ if __name__ == '__main__':
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
         create_new_project(target_ip, env_version, id3_mode_project_name, 'id3', idm_engine_type, skip_init)
+        # 尝试执行 skv balance, 避免数据不均衡
+        balance_skv(target_ip)
         test_cases = [
             IdmProfileSetV3DistinctNewUserCase(idm_engine_type),
             IdmProfileSetV3DistinctOldUserCase(idm_engine_type),

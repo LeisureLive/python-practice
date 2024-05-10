@@ -82,6 +82,10 @@ def get_sdf_version(ip):
         return 'unknown'
 
 
+def balance_skv(ip):
+    exec_command(ip, 'su - sa_cluster -c "skvadmin balance start -m skv_offline" ')
+
+
 def optimize_skv(ip, skip_init):
     if skip_init:
         return
@@ -212,10 +216,62 @@ def completeIdentityConfigForMultiId(ip, project_name):
     super_api_token = exec_command(ip,
                                    'su - sa_cluster -c "aradmin config get global -n super_api_token -w literal" ')
     super_api_token = super_api_token.replace("\n", "")
-    request_body = '{"identities":[{"cname":"用户唯一标识","priority":1,"has_child_identity":false,"quantity":"1","max_value_size":1,"overload_policy":"BLOCK","is_reserved_identity":true,"is_preset":true,"uploaded":true,"creator":"系统创建","last_modified_time":null,"enabled":true,"version":1,"is_referenced_by_user_entity":false,"identity":"$identity_login_id"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":2,"cname":"用户手机号标识","mode":"add","creator":"平台管理员","identity":"$identity_mobile"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":3,"cname":"用户邮箱标识","mode":"add","creator":"平台管理员","identity":"$identity_email"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":4,"cname":"淘宝用户 ouid","mode":"add","creator":"平台管理员","identity":"$identity_taobao_ouid"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":5,"cname":"IDFV","mode":"add","creator":"平台管理员","identity":"$identity_idfv"},{"cname":"历史匿名 ID","priority":6,"has_child_identity":false,"quantity":"N","max_value_size":10,"overload_policy":"FIFO","is_reserved_identity":true,"is_preset":true,"uploaded":true,"creator":"系统创建","last_modified_time":null,"enabled":true,"version":1,"is_referenced_by_user_entity":false,"identity":"$identity_anonymous_id"},{"cname":"历史兼容 ID","priority":7,"has_child_identity":false,"quantity":"N","max_value_size":20,"overload_policy":"FIFO","is_reserved_identity":true,"is_preset":true,"uploaded":true,"creator":"系统创建","last_modified_time":null,"enabled":true,"version":1,"is_referenced_by_user_entity":false,"identity":"$identity_distinct_id"}],"schema_name":"users"}'
+    # 查询当前的用户关联配置
+    current_timestamp = str(int(time.time() * 1000))
+    cmd = f'''
+        curl -X GET \
+        -H "Content-Type: application/json;charset=UTF-8" \
+        'http://{ip}:8107/api/v3/horizon/v1/web/identity/list_identity?token={super_api_token}&project={project_name}&schema_name=users&time={current_timestamp}'
+    '''
+    identity_result = exec_command_and_check(ip, cmd)
+    if not identity_result.__contains__("SUCCESS"):
+        raise Exception(f"获取当前用户关联配置失败, [project_name={project_name}, resp={identity_result}]")
+
+    identity_result = json.loads(identity_result)
+    identity_datas = identity_result['data']
+    need_add_identity_names = ['$identity_mobile', '$identity_email', '$identity_taobao_ouid', '$identity_idfv',
+                               '$identity_cookie_id']
+    identity_infos = {"$identity_mobile": "用户手机号标识", "$identity_email": "用户邮箱标识", "$identity_taobao_ouid": "淘宝用户 ouid",
+                      "$identity_idfv": "IDFV", "$identity_cookie_id": "Web cookie ID"}
+    modify_identity_request_body = {"identities": [], "schema_name": "users"}
+    for identity_data in identity_datas:
+        current_priority = identity_data['priority']
+        if identity_data['identity'] in need_add_identity_names:
+            need_add_identity_names.remove(identity_data['identity'])
+
+        if identity_data['identity'] == '$identity_anonymous_id':
+            # 此时将需要添加的id加入，放在 $identity_anonymous_id 和 $identity_distinct_id 之前
+            for need_add_identity_name in need_add_identity_names:
+                new_identity = {}
+                new_identity['enabled'] = true
+                new_identity['is_preset'] = false
+                new_identity['uploaded'] = false
+                current_priority = current_priority + 1
+                new_identity['priority'] = current_priority
+                new_identity['cname'] = identity_infos.get(need_add_identity_name)
+                new_identity['mode'] = "add"
+                new_identity['creator'] = "平台管理员"
+                new_identity['identity'] = need_add_identity_name
+                modify_identity_request_body['identities'].append(new_identity)
+
+        # $identity_anonymous_id 和 $identity_distinct_id 的优先级后移
+        if identity_data['identity'] == '$identity_anonymous_id' or identity_data[
+            'identity'] == '$identity_distinct_id':
+            identity_data['priority'] = int(identity_data['priority']) + len(need_add_identity_names)
+
+        # 添加到请求体中
+        identity_data['last_modified_time'] = None
+        identity_data['uploaded'] = true
+        modify_identity_request_body['identities'].append(identity_data)
+
+    if len(need_add_identity_names) == 0:
+        # 没有需要添加的用户标识
+        return
+
+    request_body = json.dumps(modify_identity_request_body, ensure_ascii=false)
     cmd = f'''
         curl -X POST \
-        'http://10.129.24.90:8107/api/v3/horizon/v1/web/identity/batch_save?token={super_api_token}&project={project_name}' \
+        'http://{ip}:8107/api/v3/horizon/v1/web/identity/batch_save?token={super_api_token}&project={project_name}' \
         -H 'Content-Type: application/json;charset=UTF-8' \
         -d '{request_body}'
         '''
@@ -238,15 +294,6 @@ def create_new_project_in_sdf(ip, project_name, idm_mode):
                      .format(project_name))
 
 
-def open_idm_optimize_trigger(ip, env_version, skip_init):
-    if skip_init:
-        return
-    if env_version == 'new':
-        open_idm_optimize_trigger_in_new_env(ip)
-    else:
-        open_idm_optimize_trigger_in_old_env(ip)
-
-
 def optimize_kafka(ip, env_version, skip_init):
     if skip_init:
         return
@@ -262,13 +309,22 @@ def optimize_kafka(ip, env_version, skip_init):
                                "su - sa_cluster -c 'kafka-configs --zookeeper localhost:2181  --alter --entity-name sdf_input_topic --entity-type topics --add-config retention.ms=72000000' ")
 
 
+def open_idm_optimize_trigger(ip, env_version, skip_init):
+    if skip_init:
+        return
+    if env_version == 'new':
+        open_idm_optimize_trigger_in_new_env(ip)
+    else:
+        open_idm_optimize_trigger_in_old_env(ip)
+
+
 def open_idm_optimize_trigger_in_new_env(ip):
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_engine_open_concurrent -v true --unstable" ')
     exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 10 --unstable" ')
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 8 --unstable" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
     exec_command(ip,
@@ -285,7 +341,7 @@ def open_idm_optimize_trigger_in_new_env(ip):
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
     if check_is_cluster(ip):
         exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+                     'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 1024 --unstable" ')
         exec_command(ip,
                      'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n job_manager_tm_mem_mb -v 8192" ')
     else:
@@ -313,6 +369,8 @@ def open_idm_optimize_trigger_in_old_env(ip):
 
     exec_command(ip,
                  'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
 
     restart_module(ip, "sdf", "id_mapping_skv_proxy")
     restart_module(ip, "sdf", "extractor")
@@ -765,7 +823,3 @@ def check_extractor_qps(ip, data_count):
     qps_detail.update({"max_qps": str(max_qps)})
     qps_detail.update({"min_qps": str(min_qps)})
     return qps_detail
-
-
-if __name__ == '__main__':
-    completeIdentityConfigForMultiId('10.129.24.90', 'benchmark_id3_new_fast_mode_2024_05_10')
