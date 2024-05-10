@@ -120,44 +120,122 @@ def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type,
     if skip_init:
         return
     if env_version == 'new':
-        exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
-                     .format(project_name, project_name))
-        time.sleep(5)
-        exec_command(ip,
-                     'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t back_to_cmpt_one"'
-                     .format(project_name))
-        if idm_mode == 'id2':
-            if idm_engine_type == 'default':
-                exec_command(ip,
-                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup"'
-                             .format(project_name))
-            elif idm_engine_type == 'fast_mode':
-                exec_command(ip,
-                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
-                             .format(project_name))
-        elif idm_mode == 'id3':
-            exec_command(ip,
-                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
-                         .format(project_name))
-            if idm_engine_type == 'fast_mode':
-                exec_command(ip,
-                             'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
-                             .format(project_name))
+        create_new_project_in_sdh(ip, project_name, idm_mode, idm_engine_type)
     else:
+        create_new_project_in_sdf(ip, project_name, idm_mode)
+
+
+def create_new_project_in_sdh(ip, project_name, idm_mode, idm_engine_type):
+    horizon_version = get_horizon_version(ip)
+    if horizon_version < "1.3.1":
+        create_new_project_before_sdh131(ip, project_name, idm_mode, idm_engine_type)
+    else:
+        create_new_project_after_sdh131(ip, project_name, idm_mode, idm_engine_type)
+
+
+def create_new_project_before_sdh131(ip, project_name, idm_mode, idm_engine_type):
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                 .format(project_name, project_name))
+    time.sleep(5)
+    exec_command(ip,
+                 'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t back_to_cmpt_one"'
+                 .format(project_name))
+    if idm_mode == 'id2':
+        if idm_engine_type == 'default':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup"'
+                         .format(project_name))
+        elif idm_engine_type == 'fast_mode':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
+                         .format(project_name))
+    elif idm_mode == 'id3':
         exec_command(ip,
-                     'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
-                     .format(project_name, project_name))
-        time.sleep(5)
-        if idm_mode == 'id2':
-            # 开启多对一
+                     'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3"'
+                     .format(project_name))
+        if idm_engine_type == 'fast_mode':
             exec_command(ip,
-                         'su - sa_cluster -c "sbpadmin project update -n {} --enable-new-signup"'
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_fast_mode"'
                          .format(project_name))
-        elif idm_mode == 'id3':
+
+
+def create_new_project_after_sdh131(ip, project_name, idm_mode, idm_engine_type):
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                 .format(project_name, project_name))
+    time.sleep(5)
+    project_id = find_project_id_by_name(ip, project_name)
+    # 切回兼容模式
+    exec_command(ip,
+                 f'''su - sa_cluster -c 'metadb_cli -usc_dba -Dhorizon_db -e "update sdh_identity_project_config set id_mapping_version=\\"v3.0_cmpt_one\\", idmapping_strategy=\\"MAPPING_ONCE\\", idmapping_exe_engine = \\"ENGINE_STANDARD\\" where project_id = {project_id}" ' ''')
+    if idm_mode == 'id2':
+        if idm_engine_type == 'default':
             exec_command(ip,
-                         'su - sa_cluster -c "sdfadmin enable_id_mapping_v3 change_to_v3 -p {} -r "'
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_multi_signup" '
                          .format(project_name))
+        elif idm_engine_type == 'fast_mode':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_idm_engine -p {} -t engine_hpe" '
+                         .format(project_name))
+    elif idm_mode == 'id3':
+        if idm_engine_type == 'default':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_version -p {} -t open_id_mapping_v3" '
+                         .format(project_name))
+        elif idm_engine_type == 'fast_mode':
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_idm_engine -p {} -t engine_hpe" '
+                         .format(project_name))
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool change_strategy -p {} -t merge_if_possible" '
+                         .format(project_name))
+            exec_command(ip,
+                         'su - sa_cluster -c "horizonadmin identity_tool enable_multi_id -p {}" '
+                         .format(project_name))
+
+        # 添加预置用户关联
+        completeIdentityConfigForMultiId(ip, project_name)
+
+
+def find_project_id_by_name(ip, project_name):
+    project_id_result = exec_command(ip,
+                                     f'''su - sa_cluster -c 'metadb_cli -usc_dba -Dmetadata -e "select id from sbp_project where name =\\"{project_name}"\\"  ' ''')
+    match = re.search(r'\d+', project_id_result)
+    if match:
+        return match.group()
+    else:
+        raise Exception(f"can't find project_id by name, [name={project_name}]")
+
+
+def completeIdentityConfigForMultiId(ip, project_name):
+    super_api_token = exec_command(ip,
+                                   'su - sa_cluster -c "aradmin config get global -n super_api_token -w literal" ')
+    super_api_token = super_api_token.replace("\n", "")
+    request_body = '{"identities":[{"cname":"用户唯一标识","priority":1,"has_child_identity":false,"quantity":"1","max_value_size":1,"overload_policy":"BLOCK","is_reserved_identity":true,"is_preset":true,"uploaded":true,"creator":"系统创建","last_modified_time":null,"enabled":true,"version":1,"is_referenced_by_user_entity":false,"identity":"$identity_login_id"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":2,"cname":"用户手机号标识","mode":"add","creator":"平台管理员","identity":"$identity_mobile"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":3,"cname":"用户邮箱标识","mode":"add","creator":"平台管理员","identity":"$identity_email"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":4,"cname":"淘宝用户 ouid","mode":"add","creator":"平台管理员","identity":"$identity_taobao_ouid"},{"enabled":true,"is_preset":false,"uploaded":false,"priority":5,"cname":"IDFV","mode":"add","creator":"平台管理员","identity":"$identity_idfv"},{"cname":"历史匿名 ID","priority":6,"has_child_identity":false,"quantity":"N","max_value_size":10,"overload_policy":"FIFO","is_reserved_identity":true,"is_preset":true,"uploaded":true,"creator":"系统创建","last_modified_time":null,"enabled":true,"version":1,"is_referenced_by_user_entity":false,"identity":"$identity_anonymous_id"},{"cname":"历史兼容 ID","priority":7,"has_child_identity":false,"quantity":"N","max_value_size":20,"overload_policy":"FIFO","is_reserved_identity":true,"is_preset":true,"uploaded":true,"creator":"系统创建","last_modified_time":null,"enabled":true,"version":1,"is_referenced_by_user_entity":false,"identity":"$identity_distinct_id"}],"schema_name":"users"}'
+    cmd = f'''
+        curl -X POST \
+        'http://10.129.24.90:8107/api/v3/horizon/v1/web/identity/batch_save?token={super_api_token}&project={project_name}' \
+        -H 'Content-Type: application/json;charset=UTF-8' \
+        -d '{request_body}'
+        '''
+    exec_command_and_check(ip, cmd)
+
+
+def create_new_project_in_sdf(ip, project_name, idm_mode):
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin project create -c {} -n {} --disable-schema-limited"'
+                 .format(project_name, project_name))
+    time.sleep(5)
+    if idm_mode == 'id2':
+        # 开启多对一
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin project update -n {} --enable-new-signup"'
+                     .format(project_name))
+    elif idm_mode == 'id3':
+        exec_command(ip,
+                     'su - sa_cluster -c "sdfadmin enable_id_mapping_v3 change_to_v3 -p {} -r "'
+                     .format(project_name))
 
 
 def open_idm_optimize_trigger(ip, env_version, skip_init):
@@ -167,6 +245,7 @@ def open_idm_optimize_trigger(ip, env_version, skip_init):
         open_idm_optimize_trigger_in_new_env(ip)
     else:
         open_idm_optimize_trigger_in_old_env(ip)
+
 
 def optimize_kafka(ip, env_version, skip_init):
     if skip_init:
@@ -202,6 +281,8 @@ def open_idm_optimize_trigger_in_new_env(ip):
                  'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
     exec_command(ip,
                  'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
     if check_is_cluster(ip):
         exec_command(ip,
                      'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
@@ -684,3 +765,7 @@ def check_extractor_qps(ip, data_count):
     qps_detail.update({"max_qps": str(max_qps)})
     qps_detail.update({"min_qps": str(min_qps)})
     return qps_detail
+
+
+if __name__ == '__main__':
+    completeIdentityConfigForMultiId('10.129.24.90', 'benchmark_id3_new_fast_mode_2024_05_10')
