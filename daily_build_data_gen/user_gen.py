@@ -1,6 +1,7 @@
 import json
 import sys
 import uuid
+import random
 
 from daily_build_data_gen import data_utils
 from daily_build_data_gen.data_type import DataType
@@ -141,6 +142,17 @@ class UserGen:
         row['login_id'] = 'login_id_muti_case_' + suffix
         row['distinct_id'] = 'login_id_muti_case_' + suffix
         return row
+
+    def gen_many_to_one_data(self, row):
+        device_id_size = random.randint(1, 5)
+        random_uuid = str(uuid.uuid4())
+        login_id = "login_id_" + random_uuid
+        rets = []
+        for i in range(device_id_size):
+            ret = self.gen_data(row)
+            ret['login_id'] = login_id
+            rets.append(ret)
+        return rets
 
     def _put_prop_if_exists(self, dict, key, value):
         if value is not None:

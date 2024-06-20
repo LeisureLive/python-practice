@@ -62,7 +62,7 @@ cd {work_path} && \
   --num-executors "{int(int(args.parallel) / 2)}" \
   --executor-cores "2" \
   --py-files daily_build_data_gen.zip \
-  {script_dir}/generate_benchmark_basic_data.py \
+  {script_dir}/generate_many_to_one_basic_data.py \
   -id2_data_count {args.id2_data_count} \
   -id3_data_count {args.id3_data_count} \
   -engine_type {args.engine_type} \
@@ -128,14 +128,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-build_url', type=str, default="http://build_url", help='build_url')
     parser.add_argument('-build_user_id', type=str, default='hejie', help='build_user_id')
-    parser.add_argument('-target_ip', type=str, default='10.129.23.220', help='ip')
+    parser.add_argument('-target_ip', type=str, default='10.129.26.245', help='ip')
     parser.add_argument('-webhook', type=str, default='', help='webhook')
-    parser.add_argument('-parallel', type=str, default='24', help='启动的 executor 线程数，每个占 1C/1G')
+    parser.add_argument('-parallel', type=str, default='8', help='启动的 executor 线程数，每个占 1C/1G')
     parser.add_argument('-tag', type=str, default='默认', help='自定义标记')
 
     # 生成数据的参数，会透传
-    parser.add_argument('-engine_type', type=str, default="fast_mode", help='数据集供哪种引擎使用')
-    parser.add_argument('-id2_data_count', type=int, default=3000000, help='id2 场景下各数据集生成的数据量')
-    parser.add_argument('-id3_data_count', type=int, default=1500000, help='id3 场景下各数据集生成的数据量')
+    parser.add_argument('-engine_type', type=str, default="default", help='数据集供哪种引擎使用')
+    parser.add_argument('-id2_data_count', type=int, default=1000000, help='id2 场景下各数据集生成的数据量')
+    parser.add_argument('-id3_data_count', type=int, default=0, help='id3 场景下各数据集生成的数据量')
     parser.add_argument('-data_path', type=str, default="hdfs:///sa/runtime/daily_benchmark_basic_data", help='数据存放目录')
     process(parser.parse_args())

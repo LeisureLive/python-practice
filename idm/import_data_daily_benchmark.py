@@ -5,6 +5,7 @@ import sys
 
 import requests
 
+
 sys.path.append('../')
 from idm.test_cases.id2.profile_set_distinct_new_anonymous_user import IdmProfileSetV2DistinctNewAnonymousUserCase
 from idm.test_cases.id2.profile_set_distinct_new_login_user import IdmProfileSetV2DistinctNewLoginUserCase
@@ -16,6 +17,7 @@ from idm.test_cases.id2.track_distinct_old_anonymous_user import IdmTrackV2Disti
 from idm.test_cases.id2.track_old_anonymous_user_bind_loginid import IdmTrackAnonymousUserBindLoginIdCase
 from idm.test_cases.id2.track_old_multi_login_user_only_with_anonymousid import \
     IdmTrackMultiLoginUserOnlyWithAnonymousIdCase
+from idm.test_cases.id2.profile_set_many_to_one_new_user import IdmProfileSetManyToOneUserCase
 from idm.test_cases.id3.profile_set_distinct_new_user import IdmProfileSetV3DistinctNewUserCase
 from idm.test_cases.id3.profile_set_distinct_old_user import IdmProfileSetV3DistinctOldUserCase
 from idm.test_cases.id3.profile_track_mixed_distinct_user import IdmProfileTrackV3MixedDistinctUserCase
@@ -139,11 +141,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-build_url', type=str, default=None, help='build_url')
     parser.add_argument('-build_user_id', type=str, default='hejie', help='build_user_id')
-    parser.add_argument('-basic_data_ip', type=str, default='10.129.23.220', help='basic data storage ip')
-    parser.add_argument('-target_ip', type=str, default='10.129.29.153', help='target ip')
+    parser.add_argument('-basic_data_ip', type=str, default='10.129.26.245', help='basic data storage ip')
+    parser.add_argument('-target_ip', type=str, default='10.129.26.245', help='target ip')
     parser.add_argument('-webhook', type=str, default='', help='webhook')
-    parser.add_argument('-id2_mode_data_count', type=int, default=0, help='id2_mode_data_count')
-    parser.add_argument('-id3_mode_data_count', type=int, default=1000, help='id3_mode_data_count')
+    parser.add_argument('-id2_mode_data_count', type=int, default=1000000, help='id2_mode_data_count')
+    parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
     parser.add_argument('-mock_idm_data_count', type=int, default=0, help='mock_idm_data_count')
     parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2_new', help='id2_mode_project_name')
     parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3_new', help='id3_mode_project_name')
@@ -165,14 +167,13 @@ if __name__ == '__main__':
     target_ip_list = get_ips_from_hosts(target_ip)
     print("target_ip_list = %s" % target_ip_list)
     basic_data_ip_list = get_ips_from_hosts(basic_data_ip)
-    print("basic_data_ip_list = %s" % target_ip_list)
+    print("basic_data_ip_list = %s" % basic_data_ip_list)
     id2_mode_data_count = args.id2_mode_data_count
     id3_mode_data_count = args.id3_mode_data_count
     mock_idm_data_count = args.mock_idm_data_count
     idm_engine_type = args.idm_engine_type
 
-    id2_mode_project_name = args.id2_mode_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
-        "%Y_%m_%d")
+    id2_mode_project_name = "production"
     id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
         "%Y_%m_%d")
     mock_idm_project_name = args.mock_idm_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
@@ -194,27 +195,28 @@ if __name__ == '__main__':
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
+        # create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
         # 尝试执行 skv balance, 避免数据不均衡
         balance_skv(target_ip)
         test_cases = [
-            IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
-            IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
-            IdmProfileSetV2DistinctNewLoginUserCase(idm_engine_type),
-            IdmProfileSetV2DistinctOldLoginUserCase(idm_engine_type),
-            IdmTrackV2DistinctNewAnonymousUserCase(idm_engine_type),
-            IdmTrackV2DistinctOldAnonymousUserCase(idm_engine_type),
-            IdmProfileTrackMixedUserCase(idm_engine_type),
-            IdmTrackAnonymousUserBindLoginIdCase(idm_engine_type),
-            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(idm_engine_type)
+            IdmProfileSetManyToOneUserCase(idm_engine_type)
+            # IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
+            # IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
+            # IdmProfileSetV2DistinctNewLoginUserCase(idm_engine_type),
+            # IdmProfileSetV2DistinctOldLoginUserCase(idm_engine_type),
+            # IdmTrackV2DistinctNewAnonymousUserCase(idm_engine_type),
+            # IdmTrackV2DistinctOldAnonymousUserCase(idm_engine_type),
+            # IdmProfileTrackMixedUserCase(idm_engine_type),
+            # IdmTrackAnonymousUserBindLoginIdCase(idm_engine_type),
+            # IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(idm_engine_type)
         ]
 
-        pause_import_and_wait_consume_latency(target_ip, env_version)
+        # pause_import_and_wait_consume_latency(target_ip, env_version)
         for test_case in test_cases:
-            start_import_and_pause_handler(target_ip, env_version)
+            # start_import_and_pause_handler(target_ip, env_version)
             test_case.do_test(basic_data_ip, ",".join(target_ip_list), id2_mode_project_name, id2_mode_data_count)
-            start_handler(target_ip, env_version)
-            id2_project_qps_list.append(test_case.collect_qps(target_ip, id2_mode_data_count))
+            # start_handler(target_ip, env_version)
+            # id2_project_qps_list.append(test_case.collect_qps(target_ip, id2_mode_data_count))
 
     # 5、对 id3 项目进行测试
     id3_project_qps_list = []
