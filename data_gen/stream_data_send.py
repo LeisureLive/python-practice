@@ -46,7 +46,8 @@ def map_to_json(row):
             result[key] = value
     if result.get("login_id") is not None:
         result["distinct_id"] = result.get("login_id")
-        result["identities"]["$identity_login_id"] = result.get("login_id")
+        if args.idm_version == 'id3':
+            result["identities"]["$identity_login_id"] = result.get("login_id")
     else:
         result["distinct_id"] = result.get("anonymous_id")
     return result
