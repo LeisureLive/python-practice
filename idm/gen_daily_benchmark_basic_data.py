@@ -62,7 +62,7 @@ cd {work_path} && \
   --num-executors "{int(int(args.parallel) / 2)}" \
   --executor-cores "2" \
   --py-files daily_build_data_gen.zip \
-  {script_dir}/generate_many_to_one_basic_data.py \
+  {script_dir}/generate_benchmark_basic_data.py \
   -id2_data_count {args.id2_data_count} \
   -id3_data_count {args.id3_data_count} \
   -engine_type {args.engine_type} \

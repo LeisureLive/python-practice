@@ -34,10 +34,12 @@ def get_pwd():
 
 def get_env_version(ip):
     horizon_version = get_horizon_version(ip)
-    if horizon_version != 'unknown':
-        return 'new'
+    if horizon_version != 'unknown' and horizon_version.startswith('1.3.1'):
+        return 'SDH-131'
+    elif horizon_version != 'unknown' and horizon_version >= '1.3.2':
+        return 'SDH-132'
     else:
-        return 'old'
+        return 'old-env'
 
 
 def get_sdi_version(ip):
@@ -123,7 +125,7 @@ def optimize_skv(ip, skip_init):
 def create_new_project(ip, env_version, project_name, idm_mode, idm_engine_type, skip_init):
     if skip_init:
         return
-    if env_version == 'new':
+    if env_version != 'old-env':
         create_new_project_in_sdh(ip, project_name, idm_mode, idm_engine_type)
     else:
         create_new_project_in_sdf(ip, project_name, idm_mode)
@@ -297,7 +299,7 @@ def create_new_project_in_sdf(ip, project_name, idm_mode):
 def optimize_kafka(ip, env_version, skip_init):
     if skip_init:
         return
-    if env_version == 'new':
+    if env_version != 'old-env':
         exec_command_and_check(ip,
                                "su - sa_cluster -c 'kafka-configs --zookeeper localhost:2181  --alter --entity-name integrator_input_topic --entity-type topics --add-config retention.ms=72000000' ")
         exec_command_and_check(ip,
@@ -312,13 +314,15 @@ def optimize_kafka(ip, env_version, skip_init):
 def open_idm_optimize_trigger(ip, env_version, skip_init):
     if skip_init:
         return
-    if env_version == 'new':
-        open_idm_optimize_trigger_in_new_env(ip)
+    if env_version == 'SDH-131':
+        open_idm_optimize_trigger_in_SDH_131(ip)
+    elif env_version == 'SDH-132':
+        open_idm_optimize_trigger_in_SDH_132(ip)
     else:
         open_idm_optimize_trigger_in_old_env(ip)
 
 
-def open_idm_optimize_trigger_in_new_env(ip):
+def open_idm_optimize_trigger_in_SDH_131(ip):
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_is_open_direct_skv -v true --unstable" ')
     exec_command(ip,
@@ -326,9 +330,9 @@ def open_idm_optimize_trigger_in_new_env(ip):
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 8 --unstable" ')
     exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
+                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
     exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k id_mapping_direct_skv_thread_pool_size -v 8 --unstable" ')
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
     exec_command(ip,
@@ -354,6 +358,44 @@ def open_idm_optimize_trigger_in_new_env(ip):
     restart_module(ip, "edge", "edge")
     restart_module(ip, "horizon", "identity_skv_proxy")
     restart_module(ip, "integrator", "scheduler")
+
+
+def open_idm_optimize_trigger_in_SDH_132(ip):
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_is_open_direct_skv -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_engine_open_concurrent -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_direct_skv_thread_pool_size -v 8 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_batch_process_pack_max_size -v 2000 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_write_async -v true --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p horizon -m identity_skv_proxy -n mem_mb -v 4096" ')
+    exec_command(ip,
+                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n mem_limit -v "4096Mi" \' ')
+    exec_command(ip,
+                 'su - sa_cluster -c \'aradmin ss set -p horizon -m identity_skv_proxy -r identity_skv_proxy -n jvm_xmx -v "4096Mi" \' ')
+    exec_command(ip,
+                 'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
+    if check_is_cluster(ip):
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -p horizon -m stream_manager -n job_manager_tm_mem_mb -v 8192" ')
+    else:
+        # 单机环境需要调整 scheduler 进程的内存大小
+        exec_command(ip,
+                     'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_batch_process_pack_max_size -v 1024 --unstable" ')
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m horizon -p stream_manager -n mem_mb -v 4096" ')
+
+    restart_module(ip, "edge", "edge")
+    restart_module(ip, "horizon", "identity_skv_proxy")
+    restart_module(ip, "horizon", "stream_manager")
 
 
 def open_idm_optimize_trigger_in_old_env(ip):
@@ -507,10 +549,14 @@ def extract_ip_from_line(line):
 
 def pause_import_and_wait_consume_latency(ip, env_version):
     print("暂停导入并等待数据延迟被消费完成")
-    if env_version == 'new':
+    if env_version == 'SDH-131':
         pause_module(ip, "edge", "edge")
         start_module(ip, "integrator", "scheduler")
-        waiting_sdi_consume_latency(ip)
+        waiting_sdi_consume_latency(ip, env_version)
+    elif env_version == 'SDH-132':
+        pause_module(ip, "edge", "edge")
+        start_module(ip, "horizon", "stream_manager")
+        waiting_sdi_consume_latency(ip, env_version)
     else:
         pause_module(ip, "edge", "edge")
         start_module(ip, "sdf", "extractor")
@@ -519,8 +565,12 @@ def pause_import_and_wait_consume_latency(ip, env_version):
 
 def start_import_and_pause_handler(ip, env_version):
     print("开启导入并暂停数据处理, 堆积压测数据")
-    if env_version == 'new':
+    if env_version == 'SDH-131':
         pause_module(ip, "integrator", "scheduler")
+        start_module(ip, "edge", "edge")
+        clear_sdi_scheduler_log(ip)
+    elif env_version == 'SDH-132':
+        pause_module(ip, "horizon", "stream_manager")
         start_module(ip, "edge", "edge")
         clear_sdi_scheduler_log(ip)
     else:
@@ -531,8 +581,10 @@ def start_import_and_pause_handler(ip, env_version):
 
 def start_handler(ip, env_version):
     print("开启数据处理, 消费堆积数据")
-    if env_version == 'new':
+    if env_version == 'SDH-131':
         start_module(ip, "integrator", "scheduler")
+    elif env_version == 'SDH-132':
+        start_module(ip, "horizon", "stream_manager")
     else:
         start_module(ip, "sdf", "extractor")
 
@@ -549,30 +601,36 @@ def start_module(ip, product, module):
     exec_command(ip, 'su - sa_cluster -c "aradmin start -p {} -m {}" '.format(product, module))
 
 
-def check_sdi_exists_latency(ip):
-    result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency"')
+def check_sdi_exists_latency(ip, env_version):
+    if env_version == 'SDH-131':
+        result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency" ')
+    else:
+        result = exec_command(ip, 'su - sa_cluster -c "horizonadmin inflow check_latency" ')
     if result.__contains__("don't exist latency") or get_sdi_latency_total_size(result) < 10:
-        print("检测 sdi 无延迟")
+        print("检测 processor-chain 无延迟")
         return False
     else:
         return True
 
 
-def waiting_sdi_consume_latency(ip):
+def waiting_sdi_consume_latency(ip, env_version):
     i = 0
     while True:
-        result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency"')
+        if env_version == 'SDH-131':
+            result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency" ')
+        else:
+            result = exec_command(ip, 'su - sa_cluster -c "horizonadmin inflow check_latency" ')
         if result.__contains__("don't exist latency") or get_sdi_latency_total_size(result) < 10:
-            print("检测 sdi 无延迟")
+            print("检测 processor-chain 无延迟")
             break
         elif i >= 120:
-            print("检测 sdi 存在延迟, 已等待超过40分钟, 请检查服务状态!")
+            print("检测 processor-chain 存在延迟, 已等待超过40分钟, 请检查服务状态!")
             time.sleep(20)
             i = i + 1
         else:
             i = i + 1
             time.sleep(20)
-            print("检测 sdi 存在延迟, 已等待 {}s".format(20 * (i - 1)))
+            print("检测 processor-chain 存在延迟, 已等待 {}s".format(20 * (i - 1)))
 
 
 def get_sdi_latency_total_size(result):
@@ -680,8 +738,9 @@ def dealwith(gzipType, jsonString):
 
 
 def collect_sdi_qps(ip, data_count):
+    env_version = get_env_version(ip)
     i = 0
-    while check_sdi_exists_latency(ip):
+    while check_sdi_exists_latency(ip, env_version):
         time.sleep(20)
         print("等待 sdi 数据处理完成, 已等待{}s".format(i * 20))
         i += 1
@@ -694,13 +753,18 @@ def collect_sdi_qps(ip, data_count):
 
 def check_sdi_qps(ip, line_count, data_count):
     is_cluster = check_is_cluster(ip)
+    env_version =  get_env_version(ip)
     if is_cluster:
         exec_command(ip,
                      'su - sa_cluster -c "yarn app -list | grep chain | awk -F \' \' \'{print $1}\'| xargs yarn logs -applicationId | grep \'speed info\' | tail -n ' + str(
                          line_count) + ' > /home/sa_cluster/log_data.log"')
-    else:
+    elif env_version == 'SDH-131':
         exec_command(ip,
                      'su - sa_cluster -c "grep \\"entry processed speed info\\" /sensorsdata/main/logs/integrator/scheduler/chain.log | tail -n ' + str(
+                         line_count) + ' > /home/sa_cluster/log_data.log"')
+    else:
+        exec_command(ip,
+                     'su - sa_cluster -c "grep \\"entry processed speed info\\" /sensorsdata/main/logs/horizon/stream_manager/*processorchain.log | tail -n ' + str(
                          line_count) + ' > /home/sa_cluster/log_data.log"')
 
     time.sleep(5)

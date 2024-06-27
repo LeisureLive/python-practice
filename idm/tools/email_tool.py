@@ -35,7 +35,7 @@ def send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps
         receiver_addrs = 'hejie@sensorsdata.cn'
 
     cluster_size = len(ip_list)
-    if env_version == 'new':
+    if env_version != 'old-env':
         if idm_engine_type == 'default':
             id2_mode = '[兼容模式多对一] '
             id3_mode = '[ID3 模式] '
@@ -67,11 +67,15 @@ def send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps
 
     # 正文
     content = ''
-    if env_version == 'new':
+    if env_version == 'SDH-131':
         sdi_version = get_sdi_version(ip_list[0])
         horizon_version = get_horizon_version(ip_list[0])
         content += "<p>机器 IP: " + f'{ip_list} </p>'
         content += "<p>sdi 版本: " + f'{sdi_version} </p>'
+        content += "<p>horizon 版本: " + f'{horizon_version} </p>'
+    elif env_version == 'SDH-132':
+        horizon_version = get_horizon_version(ip_list[0])
+        content += "<p>机器 IP: " + f'{ip_list} </p>'
         content += "<p>horizon 版本: " + f'{horizon_version} </p>'
     else:
         sdf_version = get_sdf_version(ip_list[0])
@@ -151,7 +155,7 @@ def send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps
     html_msg = "<html>" + head + body + "</html>"
 
     msg = MIMEMultipart()
-    if env_version == 'new':
+    if env_version != 'old-env':
         if idm_engine_type == 'default':
             subject = 'SDH 架构导入流性能测试结果(兼容模式引擎 + ID3 引擎) - ' + datetime.now().strftime("%Y-%m-%d")
         else:

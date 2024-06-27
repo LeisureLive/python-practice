@@ -17,7 +17,6 @@ from idm.test_cases.id2.track_distinct_old_anonymous_user import IdmTrackV2Disti
 from idm.test_cases.id2.track_old_anonymous_user_bind_loginid import IdmTrackAnonymousUserBindLoginIdCase
 from idm.test_cases.id2.track_old_multi_login_user_only_with_anonymousid import \
     IdmTrackMultiLoginUserOnlyWithAnonymousIdCase
-from idm.test_cases.id2.profile_set_many_to_one_new_user import IdmProfileSetManyToOneUserCase
 from idm.test_cases.id3.profile_set_distinct_new_user import IdmProfileSetV3DistinctNewUserCase
 from idm.test_cases.id3.profile_set_distinct_old_user import IdmProfileSetV3DistinctOldUserCase
 from idm.test_cases.id3.profile_track_mixed_distinct_user import IdmProfileTrackV3MixedDistinctUserCase
@@ -42,7 +41,7 @@ def push_result(ip_list, env_version, idm_engine_type, build_user_id, build_url,
 
     is_cluster = check_is_cluster(ip_list[0])
     node_num = len(ip_list)
-    if env_version == 'new':
+    if env_version != 'old-env':
         cucumber_dict.update({"环境类型": "SDH 架构"})
         sdi_version = get_sdi_version(ip_list[0])
         horizon_version = get_horizon_version(ip_list[0])
@@ -195,28 +194,27 @@ if __name__ == '__main__':
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        # create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
+        create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
         # 尝试执行 skv balance, 避免数据不均衡
         balance_skv(target_ip)
         test_cases = [
-            IdmProfileSetManyToOneUserCase(idm_engine_type)
-            # IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
-            # IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
-            # IdmProfileSetV2DistinctNewLoginUserCase(idm_engine_type),
-            # IdmProfileSetV2DistinctOldLoginUserCase(idm_engine_type),
-            # IdmTrackV2DistinctNewAnonymousUserCase(idm_engine_type),
-            # IdmTrackV2DistinctOldAnonymousUserCase(idm_engine_type),
-            # IdmProfileTrackMixedUserCase(idm_engine_type),
-            # IdmTrackAnonymousUserBindLoginIdCase(idm_engine_type),
-            # IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(idm_engine_type)
+            IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
+            IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
+            IdmProfileSetV2DistinctNewLoginUserCase(idm_engine_type),
+            IdmProfileSetV2DistinctOldLoginUserCase(idm_engine_type),
+            IdmTrackV2DistinctNewAnonymousUserCase(idm_engine_type),
+            IdmTrackV2DistinctOldAnonymousUserCase(idm_engine_type),
+            IdmProfileTrackMixedUserCase(idm_engine_type),
+            IdmTrackAnonymousUserBindLoginIdCase(idm_engine_type),
+            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(idm_engine_type)
         ]
 
-        # pause_import_and_wait_consume_latency(target_ip, env_version)
+        pause_import_and_wait_consume_latency(target_ip, env_version)
         for test_case in test_cases:
-            # start_import_and_pause_handler(target_ip, env_version)
+            start_import_and_pause_handler(target_ip, env_version)
             test_case.do_test(basic_data_ip, ",".join(target_ip_list), id2_mode_project_name, id2_mode_data_count)
-            # start_handler(target_ip, env_version)
-            # id2_project_qps_list.append(test_case.collect_qps(target_ip, id2_mode_data_count))
+            start_handler(target_ip, env_version)
+            id2_project_qps_list.append(test_case.collect_qps(target_ip, id2_mode_data_count))
 
     # 5、对 id3 项目进行测试
     id3_project_qps_list = []
