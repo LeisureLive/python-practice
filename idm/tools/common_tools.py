@@ -184,6 +184,9 @@ def create_new_project_after_sdh131(ip, project_name, idm_mode, idm_engine_type)
             exec_command_and_check(ip,
                                    'su - sa_cluster -c "horizonadmin identity_tool change_idm_engine -p {} -t engine_hpe" '
                                    .format(project_name))
+            exec_command_and_check(ip,
+                                   'su - sa_cluster -c "horizonadmin identity_tool change_strategy -p {} -t merge_if_possible" '
+                                   .format(project_name))
     elif idm_mode == 'id3':
         if idm_engine_type == 'default':
             exec_command_and_check(ip,
@@ -248,8 +251,8 @@ def completeIdentityConfigForMultiId(ip, project_name):
                 new_identity['enabled'] = true
                 new_identity['is_preset'] = false
                 new_identity['uploaded'] = false
-                current_priority = current_priority + 1
                 new_identity['priority'] = current_priority
+                current_priority = current_priority + 1
                 new_identity['cname'] = identity_infos.get(need_add_identity_name)
                 new_identity['mode'] = "add"
                 new_identity['creator'] = "平台管理员"
@@ -889,3 +892,7 @@ def check_extractor_qps(ip, data_count):
     qps_detail.update({"max_qps": str(max_qps)})
     qps_detail.update({"min_qps": str(min_qps)})
     return qps_detail
+
+
+if __name__ == '__main__':
+    completeIdentityConfigForMultiId('10.129.29.103', 'production')
