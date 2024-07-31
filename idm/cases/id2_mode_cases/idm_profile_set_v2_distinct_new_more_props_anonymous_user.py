@@ -26,6 +26,7 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
         self.profile_set_v2_more = {
             "distinct_id": "",
             "properties": {
+                "$lib": "Java",
                 "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
@@ -171,7 +172,7 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
             print("文件 {} 不存在, 记录用户信息到此文件".format(self.file_name))
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -231,8 +232,8 @@ class IdmProfileSetV2DistinctNewUserMorePropsCase(TestCase):
                 f.write(json.dumps(item) + '\n')
         return profile_set_list
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "profile_set (匿名新用户, 125个属性)"
         return qps_detail
 

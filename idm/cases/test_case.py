@@ -7,7 +7,7 @@ class TestCase:
     def do_test(self, servers, count, list_count, proportion):
         pass
 
-    def collect_qps(self, exec_ip, data_count):
+    def collect_qps(self, exec_ip, cast_start_time):
         pass
 
     def do_import_test(self, exec_ip, project_name, count, import_mode):

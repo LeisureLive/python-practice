@@ -23,7 +23,7 @@ class IdmTrackV2DistinctAnonymousMultiUserCase(TestCase):
         self.cost = 0
         self.file_name = "track_v2_login_multi_user_{}_{}.json".format(build_user, identification)
         self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
-                         "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
+                         "lib": {"$lib_version": "2.6.4-id", "$lib": "Java", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
                          "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
@@ -34,13 +34,14 @@ class IdmTrackV2DistinctAnonymousMultiUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
+        count = count * 3
         print("开始导入 匿名事件 version=2.0 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -86,8 +87,8 @@ class IdmTrackV2DistinctAnonymousMultiUserCase(TestCase):
             track_v2_list.append(track_json)
         return track_v2_list
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "track (登录老用户匿名上报)"
         return qps_detail
 

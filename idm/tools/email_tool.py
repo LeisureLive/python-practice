@@ -46,22 +46,19 @@ def send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps
         id2_mode = '[ID2 多对一]'
         id3_mode = '[ID3] '
     # 测试结果
-    table = PrettyTable(['数据集', 'avg_qps', 'min_qps', 'max_qps'])
+    table = PrettyTable(['数据集', 'avg_qps', 'max_qps'])
     for case_qps in id2_project_qps_list:
         avg_qps = int(case_qps['avg_qps']) * cluster_size
         max_qps = int(case_qps['max_qps']) * cluster_size
-        min_qps = int(case_qps['min_qps']) * cluster_size
-        table.add_row([id2_mode + case_qps['title'], avg_qps, min_qps, max_qps])
+        table.add_row([id2_mode + case_qps['title'], avg_qps, max_qps])
     for case_qps in id3_project_qps_list:
         avg_qps = int(case_qps['avg_qps']) * cluster_size
         max_qps = int(case_qps['max_qps']) * cluster_size
-        min_qps = int(case_qps['min_qps']) * cluster_size
-        table.add_row([id3_mode + case_qps['title'], avg_qps, min_qps, max_qps])
+        table.add_row([id3_mode + case_qps['title'], avg_qps, max_qps])
     for case_qps in mock_idm_case_qps_list:
         avg_qps = int(case_qps['avg_qps']) * cluster_size
         max_qps = int(case_qps['max_qps']) * cluster_size
-        min_qps = int(case_qps['min_qps']) * cluster_size
-        table.add_row(["[Mock IDM] " + case_qps['title'], avg_qps, min_qps, max_qps])
+        table.add_row(["[Mock IDM] " + case_qps['title'], avg_qps, max_qps])
 
     data_html = table.get_html_string()
 

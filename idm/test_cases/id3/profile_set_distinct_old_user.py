@@ -12,11 +12,11 @@ true = True
 
 class IdmProfileSetV3DistinctOldUserCase(TestCase):
 
-    def __init__(self, idm_engine_type):
+    def __init__(self):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/{idm_engine_type}/id3/anonymous_old_profile_set"
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/id3/anonymous_old_profile_set"
         self.data_type = "profile_set"
         self.cost = 0
 

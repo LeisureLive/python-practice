@@ -123,73 +123,33 @@ class EventGen:
         ret['properties'] = properties
         return ret
 
-    def gen_old_data(self, row, data_times):
-        ret = []
-        user_id = row['id']
-        if user_id >= self.event_count:
-            return ret
-        for i in range(0, data_times):
-            event = random.choice(list(self.EVENT_PROP_INDEX_MAP.keys()))
-            prop_index = self.EVENT_PROP_INDEX_MAP[event]
-            element = {
-                "id": i * self.event_count + user_id,
-                "type": "track",
-                "event": event,
-                "time": int(time.time() * 1000),
-                "anonymous_id": row['anonymous_id'],
-                "distinct_id": row['distinct_id']
-            }
+    def gen_old_data(self, row):
+        event = random.choice(list(self.EVENT_PROP_INDEX_MAP.keys()))
+        row['event'] = event
+        row['time'] = int(time.time() * 1000)
+        prop_index = self.EVENT_PROP_INDEX_MAP[event]
 
-            self._put_prop_if_exists(element, "login_id", row.get('login_id'))
-            if 'identities' in row:
-                identites = row['identities']
-                element['identities'] = {}
-                self._put_prop_if_exists(element['identities'], "$identity_anonymous_id",
-                                         identites.get('$identity_anonymous_id'))
-                self._put_prop_if_exists(element['identities'], "$identity_login_id",
-                                         identites.get('$identity_login_id'))
-                self._put_prop_if_exists(element['identities'], "$identity_cookie_id",
-                                         identites.get('$identity_cookie_id'))
-                self._put_prop_if_exists(element['identities'], "$identity_mobile", identites.get('$identity_mobile'))
-                self._put_prop_if_exists(element['identities'], "$identity_idfv", identites.get('$identity_idfv'))
-                self._put_prop_if_exists(element['identities'], "$identity_email", identites.get('$identity_email'))
-                self._put_prop_if_exists(element['identities'], "$identity_taobao_ouid",
-                                         identites.get('$identity_taobao_ouid'))
-
-            properties = {}
-            for key, value in self.schema.items():
-                if key == "properties":
-                    for name, data_type in value.items():
-                        if self._check_property_in_event(prop_index, name):
-                            properties[name] = prop_gen.gen_value(name, data_type)
-            element['properties'] = properties
-            ret.append(element)
-        return ret
+        properties = {}
+        for key, value in self.schema.items():
+            if key == "properties":
+                for name, data_type in value.items():
+                    if self._check_property_in_event(prop_index, name):
+                        properties[name] = prop_gen.gen_value(name, data_type)
+        row['properties'] = properties
+        return row
 
     def gen_bind_login_data(self, row, data_times):
-        user_id = row['id']
+        id = row['id']
         base_count = int(self.event_count / data_times)
-        suffix = str(int(user_id % base_count))
+        suffix = str(int(id % base_count))
 
-        ret = {}
-        ret['login_id'] = 'login_id_muti_case_' + suffix
-        ret['distinct_id'] = 'login_id_muti_case_' + suffix
-        ret['anonymous_id'] = row['anonymous_id']
+        row['login_id'] = 'login_id_muti_case_' + suffix
+        row['distinct_id'] = 'login_id_muti_case_' + suffix
         event = random.choice(list(self.EVENT_PROP_INDEX_MAP.keys()))
         prop_index = self.EVENT_PROP_INDEX_MAP[event]
-        ret['event'] = event
-        ret['time'] = int(time.time() * 1000)
-        ret['type'] = "track"
+        row['event'] = event
+        row['time'] = int(time.time() * 1000)
 
-        # 填充 identity
-        if self.idm_version == 'id3':
-            ret['identities'] = {}
-            ret['identities']['$identity_login_id'] = row['identities']['$identity_login_id']
-            ret['identities']['$identity_cookie_id'] = row['identities']['$identity_cookie_id']
-            ret['identities']['$identity_mobile'] = row['identities']['$identity_mobile']
-            ret['identities']['$identity_idfv'] = row['identities']['$identity_idfv']
-            ret['identities']['$identity_email'] = row['identities']['$identity_email']
-            ret['identities']['$identity_taobao_ouid'] = row['identities']['$identity_taobao_ouid']
         # 填充 properties
         properties = {}
         for key, value in self.schema.items():
@@ -197,8 +157,8 @@ class EventGen:
                 for name, data_type in value.items():
                     if self._check_property_in_event(prop_index, name):
                         properties[name] = gen_value(name, data_type)
-        ret['properties'] = properties
-        return ret
+        row['properties'] = properties
+        return row
 
     def _put_prop_if_exists(self, dict, key, value):
         if value is not None:

@@ -22,7 +22,7 @@ class IdmTrack3DistinctNewUserCase(TestCase):
         super().__init__()
         self.track_v3 = {"event": "$AppStart", "time": int(time.time() * 1000),
                          "identities": {"$identity_idfv": ""},
-                         "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
+                         "lib": {"$lib_version": "2.6.4-id", "$lib": "Java", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
                          "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4",
                                         "$lib_method": "code", "$os": "iOS",
@@ -42,7 +42,7 @@ class IdmTrack3DistinctNewUserCase(TestCase):
         print("开始导入新用户 track(version=3.0) 数据, 数据量={}".format(count))
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -98,8 +98,8 @@ class IdmTrack3DistinctNewUserCase(TestCase):
             track_v3_list.append(track_json)
         return track_v3_list
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "track (匿名新用户)"
         return qps_detail
 

@@ -26,6 +26,7 @@ class IdmProfileSetV2DistinctOldUserMorePropsCase(TestCase):
         self.profile_set_v2_more = {
             "distinct_id": "",
             "properties": {
+                "$lib": "Java",
                 "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
@@ -159,13 +160,14 @@ class IdmProfileSetV2DistinctOldUserMorePropsCase(TestCase):
         }
 
     def do_test(self, servers, count, list_count, proportion=0):
+        count = count * 3
         print("开始导入 profile_set(匿名老用户, 125个属性 version=2.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -218,8 +220,8 @@ class IdmProfileSetV2DistinctOldUserMorePropsCase(TestCase):
             profile_set_list.append(profile_set_json)
         return profile_set_list
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "profile_set (匿名老用户, 125个属性, 属性产生变更)"
         return qps_detail
 

@@ -12,11 +12,11 @@ true = True
 
 class IdmTrackV2DistinctOldAnonymousUserCase(TestCase):
 
-    def __init__(self, idm_engine_type):
+    def __init__(self):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/{idm_engine_type}/id2/anonymous_old_track"
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/id2/anonymous_old_track"
         self.data_type = "track"
         self.cost = 0
 
@@ -27,7 +27,7 @@ class IdmTrackV2DistinctOldAnonymousUserCase(TestCase):
                         'id2', target_ips, project, self.basic_data_path, self.data_type)
         print("导入 track(匿名老用户, 25 个属性 version=2.0) 数据完成, 数据量={}".format(count))
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, case_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, case_start_time)
         qps_detail['title'] = "track (匿名老用户, 25个属性)"
         return qps_detail

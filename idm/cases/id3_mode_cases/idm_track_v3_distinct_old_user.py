@@ -23,7 +23,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
         self.file_name = "profile_set_v3_more_{}_{}.json".format(build_user, identification)
         self.track_v3 = {"event": "$AppStart", "time": int(time.time() * 1000),
                          "identities": {"$identity_idfv": ""},
-                         "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
+                         "lib": {"$lib_version": "2.6.4-id", "$lib": "Java", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
                          "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4",
                                         "$lib_method": "code", "$os": "iOS",
@@ -40,6 +40,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
+        count = count * 3
         print("开始导入老用户 track(version=3.0) 数据, 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
@@ -47,7 +48,7 @@ class IdmTrack3DistinctOldUserCase(TestCase):
 
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -105,8 +106,8 @@ class IdmTrack3DistinctOldUserCase(TestCase):
             track_v3_list.append(track_json)
         return track_v3_list
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "track (匿名老用户)"
         return qps_detail
 

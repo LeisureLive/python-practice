@@ -25,6 +25,7 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
         self.profile_set_v2_more = {
             "distinct_id": "",
             "properties": {
+                "$lib": "Java",
                 "$ip": "10.129.29.1",
                 "client_id": "12312312",
                 "client_name": "sdasdasd",
@@ -169,13 +170,14 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
                          "distinct_id": "", "type": "track"}
 
     def do_test(self, servers, count, list_count, proportion=0):
+        count = count * 3
         print("开始导入匿名新老用户 profile + track 混合数据(version=2.0), 数据量={}".format(count))
         with open(self.file_name, 'r') as f:
             json_data = f.readlines()
         already_identities = [json.loads(line.strip()) for line in json_data]
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -258,8 +260,8 @@ class IdmTrackProfileV2MixedUserCase(TestCase):
             num += 1
         return jsonStringV2
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "profile + track (匿名新老用户混合)"
         return qps_detail
 

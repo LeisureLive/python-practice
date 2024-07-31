@@ -12,11 +12,11 @@ true = True
 
 class IdmProfileSetManyToOneUserCase(TestCase):
 
-    def __init__(self, idm_engine_type):
+    def __init__(self):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/many_to_one_basic_data"
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/id2/many_to_one_basic_data"
         self.data_type = "profile_set"
         self.cost = 0
 

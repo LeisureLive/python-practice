@@ -97,43 +97,15 @@ class UserGen:
         ret['type'] = "profile_set"
         return ret
 
-    def gen_old_data(self, row, data_times):
-        ret = []
-        user_id = row['id']
-        if user_id > self.user_count:
-            return ret
-        for i in range(0, data_times):
-            element = {
-                "id": i * self.user_count + user_id,
-                "anonymous_id": row['anonymous_id'],
-                "distinct_id": row['distinct_id'],
-                "type": "profile_set"
-            }
-
-            self._put_prop_if_exists(element, "login_id", row.get('login_id'))
-            if 'identities' in row:
-                identites = row['identities']
-                element['identities'] = {}
-                self._put_prop_if_exists(element['identities'], "$identity_anonymous_id",
-                                         identites.get('$identity_anonymous_id'))
-                self._put_prop_if_exists(element['identities'], "$identity_login_id",
-                                         identites.get('$identity_login_id'))
-                self._put_prop_if_exists(element['identities'], "$identity_cookie_id",
-                                         identites.get('$identity_cookie_id'))
-                self._put_prop_if_exists(element['identities'], "$identity_mobile", identites.get('$identity_mobile'))
-                self._put_prop_if_exists(element['identities'], "$identity_idfv", identites.get('$identity_idfv'))
-                self._put_prop_if_exists(element['identities'], "$identity_email", identites.get('$identity_email'))
-                self._put_prop_if_exists(element['identities'], "$identity_taobao_ouid",
-                                         identites.get('$identity_taobao_ouid'))
-            # 填充 properties
-            properties = {}
-            for key, value in self.schema.items():
-                if key == "properties":
-                    for name, data_type in value.items():
-                        properties[name] = gen_value(name, data_type)
-            element['properties'] = properties
-            ret.append(element)
-        return ret
+    def gen_old_data(self, row):
+        # 重新填充 properties
+        properties = {}
+        for key, value in self.schema.items():
+            if key == "properties":
+                for name, data_type in value.items():
+                    properties[name] = gen_value(name, data_type)
+        row['properties'] = properties
+        return row
 
     def gen_bind_login_data(self, row, data_times):
         user_id = row['id']

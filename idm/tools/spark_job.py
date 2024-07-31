@@ -59,7 +59,7 @@ def start_spark_job(basic_data_ip, work_path, script_path, job_name, idm_version
       --deploy-mode client \
       --executor-memory "2G"  \
       --driver-memory "1G" \
-      --num-executors "12" \
+      --num-executors "{5 * len(target_ips)}" \
       --executor-cores "2" \
       --py-files daily_build_data_gen.zip \
       {script_path}/generate_import_data.py \

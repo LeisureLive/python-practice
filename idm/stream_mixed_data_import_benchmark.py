@@ -46,7 +46,7 @@ def process(args):
         exec_command_and_check(target_ip, "skvadmin balance start -m skv_offline")
         # 3. 导入数据
         common_tools.pause_import_and_wait_consume_latency(target_ip, target_env_version)
-        common_tools.start_import_and_pause_handler(target_ip, target_env_version)
+        common_tools.pause_edge(target_ip, target_env_version)
         start_time = int(time.time())
         start_spark_job(args, work_path, script_dir, target_ips)
         end_time = int(time.time())

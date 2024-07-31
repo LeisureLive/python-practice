@@ -24,7 +24,7 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
                                                                                                      identification)
         self.cost = 0
         self.track_v2 = {"event": "$pageview", "time": int(time.time() * 1000),
-                         "lib": {"$lib_version": "2.6.4-id", "$lib": "iOS", "$app_version": "1.9.0",
+                         "lib": {"$lib_version": "2.6.4-id", "$lib": "Java", "$app_version": "1.9.0",
                                  "$lib_method": "code"},
                          "properties": {"$ip": "10.129.29.1", "$device_id": "", "$os_version": "13.4", "$lib_method": "code", "$os": "iOS",
                                         "$screen_height": 896, "$is_first_day": false, "$app_name": "Example_yywang",
@@ -48,7 +48,7 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
         count = len(already_identities)
         # 单个并发最多导 100w 数据
         if count % 1000000 == 0:
-            concurrent_num = int(count / 1000000)
+            concurrent_num = max(1, int(count / 1000000))
         else:
             concurrent_num = int(count / 1000000) + 1
         avg_count = int(count / concurrent_num)
@@ -129,8 +129,8 @@ class IdmTrackV2DistinctNewLoginMultiUserCase(TestCase):
                 f.write(json.dumps(item) + '\n')
         return track_v2_list
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, cast_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, cast_start_time)
         qps_detail['title'] = "track (匿名用户关联同一登录id)"
         return qps_detail
 

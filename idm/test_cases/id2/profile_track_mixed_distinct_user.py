@@ -12,11 +12,11 @@ true = True
 
 class IdmProfileTrackMixedUserCase(TestCase):
 
-    def __init__(self, idm_engine_type):
+    def __init__(self):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/{idm_engine_type}/id2/anonymous_new_profile_set_track_mix"
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/id2/anonymous_new_profile_set_track_mix"
         self.data_type = "mixed"
         self.cost = 0
 
@@ -27,7 +27,7 @@ class IdmProfileTrackMixedUserCase(TestCase):
                         target_ips, project, self.basic_data_path, self.data_type)
         print("导入 profile+track(匿名新老用户混合 version=2.0) 数据完成, 数据量={}".format(count))
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, case_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, case_start_time)
         qps_detail['title'] = "profile + track (profile:track=1:20,新:老=1:50)"
         return qps_detail

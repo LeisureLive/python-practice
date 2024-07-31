@@ -2,11 +2,12 @@ import argparse
 import datetime
 import json
 import sys
+import time
 
 import requests
 
-
 sys.path.append('../')
+from idm.gen_daily_benchmark_basic_data import process_with_param
 from idm.test_cases.id2.profile_set_distinct_new_anonymous_user import IdmProfileSetV2DistinctNewAnonymousUserCase
 from idm.test_cases.id2.profile_set_distinct_new_login_user import IdmProfileSetV2DistinctNewLoginUserCase
 from idm.test_cases.id2.profile_set_distinct_old_anonymous_user import IdmProfileSetV2DistinctOldAnonymousUserCase
@@ -23,9 +24,11 @@ from idm.test_cases.id3.profile_track_mixed_distinct_user import IdmProfileTrack
 from idm.test_cases.id3.track_distinct_new_user import IdmTrackV3DistinctNewUserCase
 from idm.test_cases.id3.track_distinct_old_user import IdmTrackV3DistinctOldUserCase
 from idm.tools.common_tools import get_ips_from_hosts, get_env_version, optimize_skv, open_idm_optimize_trigger, \
-    create_new_project, start_handler, \
+    create_new_project, \
     check_is_cluster, get_sdi_version, get_horizon_version, get_sdf_version, pause_import_and_wait_consume_latency, \
-    start_import_and_pause_handler, optimize_kafka, balance_skv
+    optimize_kafka, balance_skv, start_import_and_pause_handler, start_handler, start_grafana, \
+    get_prometheus_ip, pause_edge, wait_profile_stream_consume_latency, pause_handler_and_start_edge, \
+    check_edge_latency_and_start_handler
 from idm.tools.email_tool import send_benchmark_result
 from idm.tools.spark_job import install_spark, send_code, install_requests
 
@@ -140,16 +143,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-build_url', type=str, default=None, help='build_url')
     parser.add_argument('-build_user_id', type=str, default='hejie', help='build_user_id')
-    parser.add_argument('-basic_data_ip', type=str, default='10.129.26.245', help='basic data storage ip')
     parser.add_argument('-target_ip', type=str, default='10.129.26.245', help='target ip')
     parser.add_argument('-webhook', type=str, default='', help='webhook')
-    parser.add_argument('-id2_mode_data_count', type=int, default=1000000, help='id2_mode_data_count')
-    parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
-    parser.add_argument('-mock_idm_data_count', type=int, default=0, help='mock_idm_data_count')
-    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2_new', help='id2_mode_project_name')
-    parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3_new', help='id3_mode_project_name')
-    parser.add_argument('-mock_idm_project_name', type=str, default='benchmark_mock_idm', help='mock_idm_project_name')
+    parser.add_argument('-id2_mode_data_count', type=int, default=1500000, help='id2_mode_data_count')
+    parser.add_argument('-id3_mode_data_count', type=int, default=1200000, help='id3_mode_data_count')
+    parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2', help='id2_mode_project_name')
+    parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3', help='id3_mode_project_name')
     parser.add_argument('-idm_engine_type', type=str, default='default', help='default/fast_mode')
+    parser.add_argument('-skip_gen_data', type=str, default="false", help='跳过造数')
     parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
     parser.add_argument('-import_mode', type=str, default="chain",
                         help='导入模式：chain / hdfs_importer / importer / importer_v2')
@@ -160,23 +161,23 @@ if __name__ == '__main__':
 
     # 0、解析参数
     target_ip = args.target_ip
-    basic_data_ip = args.basic_data_ip
+    skip_gen_data = args.skip_gen_data == 'true'
     skip_init = args.skip_init == "true"
     import_mode = args.import_mode
     target_ip_list = get_ips_from_hosts(target_ip)
     print("target_ip_list = %s" % target_ip_list)
-    basic_data_ip_list = get_ips_from_hosts(basic_data_ip)
-    print("basic_data_ip_list = %s" % basic_data_ip_list)
     id2_mode_data_count = args.id2_mode_data_count
     id3_mode_data_count = args.id3_mode_data_count
-    mock_idm_data_count = args.mock_idm_data_count
     idm_engine_type = args.idm_engine_type
 
-    id2_mode_project_name = "production"
-    id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
-        "%Y_%m_%d")
-    mock_idm_project_name = args.mock_idm_project_name + "_" + idm_engine_type + "_" + datetime.datetime.now().strftime(
-        "%Y_%m_%d")
+    # 造数
+    if skip_gen_data is False:
+        process_with_param(target_ip, id2_mode_data_count, id3_mode_data_count)
+
+    id2_mode_project_name = args.id2_mode_project_name + "_" + idm_engine_type + "_" \
+                            + datetime.datetime.now().strftime("%Y_%m_%d")
+    id3_mode_project_name = args.id3_mode_project_name + "_" + idm_engine_type + "_" \
+                            + datetime.datetime.now().strftime("%Y_%m_%d")
     env_version = get_env_version(target_ip)
 
     # 1、对 skv 内存进行调优
@@ -184,12 +185,15 @@ if __name__ == '__main__':
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
     open_idm_optimize_trigger(target_ip, env_version, skip_init)
     optimize_kafka(target_ip, env_version, skip_init)
+    start_grafana(target_ip)
+    prometheus_ip = get_prometheus_ip(target_ip)
+    print(f"prometheus_ip = {prometheus_ip}")
     # 3、初始化 spark 运行环境
     work_path = "/home/sa_cluster/import_data_benchmark"
     script_dir = "daily_build_data_gen"
-    install_requests(basic_data_ip_list)
-    install_spark(basic_data_ip, work_path, script_dir)
-    send_code(basic_data_ip, work_path, script_dir)
+    install_requests(target_ip_list)
+    install_spark(target_ip, work_path, script_dir)
+    send_code(target_ip, work_path, script_dir)
     # 4、对 id2 项目进行测试
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
@@ -198,23 +202,28 @@ if __name__ == '__main__':
         # 尝试执行 skv balance, 避免数据不均衡
         balance_skv(target_ip)
         test_cases = [
-            IdmProfileSetV2DistinctNewAnonymousUserCase(idm_engine_type),
-            IdmProfileSetV2DistinctOldAnonymousUserCase(idm_engine_type),
-            IdmProfileSetV2DistinctNewLoginUserCase(idm_engine_type),
-            IdmProfileSetV2DistinctOldLoginUserCase(idm_engine_type),
-            IdmTrackV2DistinctNewAnonymousUserCase(idm_engine_type),
-            IdmTrackV2DistinctOldAnonymousUserCase(idm_engine_type),
-            IdmProfileTrackMixedUserCase(idm_engine_type),
-            IdmTrackAnonymousUserBindLoginIdCase(idm_engine_type),
-            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase(idm_engine_type)
+            IdmProfileSetV2DistinctNewAnonymousUserCase(),
+            IdmProfileSetV2DistinctOldAnonymousUserCase(),
+            IdmProfileSetV2DistinctNewLoginUserCase(),
+            IdmProfileSetV2DistinctOldLoginUserCase(),
+            IdmTrackV2DistinctNewAnonymousUserCase(),
+            IdmTrackV2DistinctOldAnonymousUserCase(),
+            IdmProfileTrackMixedUserCase(),
+            IdmTrackAnonymousUserBindLoginIdCase(),
+            IdmTrackMultiLoginUserOnlyWithAnonymousIdCase()
         ]
 
         pause_import_and_wait_consume_latency(target_ip, env_version)
         for test_case in test_cases:
-            start_import_and_pause_handler(target_ip, env_version)
-            test_case.do_test(basic_data_ip, ",".join(target_ip_list), id2_mode_project_name, id2_mode_data_count)
-            start_handler(target_ip, env_version)
-            id2_project_qps_list.append(test_case.collect_qps(target_ip, id2_mode_data_count))
+            pause_edge(target_ip)
+            test_case.do_test(target_ip, ",".join(target_ip_list), id2_mode_project_name, id2_mode_data_count)
+            wait_profile_stream_consume_latency(target_ip, env_version)
+            # 停止 chain 开启 edge, 将数据堆积在 chain 的上游
+            pause_handler_and_start_edge(target_ip, env_version)
+            # 检查 edge 无延迟后, 开启 chain 处理
+            check_edge_latency_and_start_handler(target_ip_list, env_version)
+            case_start_time = int(time.time())
+            id2_project_qps_list.append(test_case.collect_qps(target_ip, case_start_time))
 
     # 5、对 id3 项目进行测试
     id3_project_qps_list = []
@@ -223,19 +232,24 @@ if __name__ == '__main__':
         # 尝试执行 skv balance, 避免数据不均衡
         balance_skv(target_ip)
         test_cases = [
-            IdmProfileSetV3DistinctNewUserCase(idm_engine_type),
-            IdmProfileSetV3DistinctOldUserCase(idm_engine_type),
-            IdmTrackV3DistinctNewUserCase(idm_engine_type),
-            IdmTrackV3DistinctOldUserCase(idm_engine_type),
-            IdmProfileTrackV3MixedDistinctUserCase(idm_engine_type)
+            IdmProfileSetV3DistinctNewUserCase(),
+            IdmProfileSetV3DistinctOldUserCase(),
+            IdmTrackV3DistinctNewUserCase(),
+            IdmTrackV3DistinctOldUserCase(),
+            IdmProfileTrackV3MixedDistinctUserCase()
         ]
 
         pause_import_and_wait_consume_latency(target_ip, env_version)
         for test_case in test_cases:
-            start_import_and_pause_handler(target_ip, env_version)
-            test_case.do_test(basic_data_ip, ",".join(target_ip_list), id3_mode_project_name, id3_mode_data_count)
-            start_handler(target_ip, env_version)
-            id3_project_qps_list.append(test_case.collect_qps(target_ip, id3_mode_data_count))
+            pause_edge(target_ip)
+            test_case.do_test(target_ip, ",".join(target_ip_list), id3_mode_project_name, id3_mode_data_count)
+            wait_profile_stream_consume_latency(target_ip, env_version)
+            # 停止 chain 开启 edge, 将数据堆积在 chain 的上游
+            pause_handler_and_start_edge(target_ip, env_version)
+            # 检查 edge 无延迟后, 开启 chain 处理
+            check_edge_latency_and_start_handler(target_ip_list, env_version)
+            case_start_time = int(time.time())
+            id3_project_qps_list.append(test_case.collect_qps(target_ip, case_start_time))
 
     # 6、mock idm 进行性能测试
     mock_idm_case_qps_list = []

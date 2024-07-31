@@ -65,11 +65,40 @@ cd {work_path} && \
   {script_dir}/generate_benchmark_basic_data.py \
   -id2_data_count {args.id2_data_count} \
   -id3_data_count {args.id3_data_count} \
-  -engine_type {args.engine_type} \
   -data_path {args.data_path}  >> gen_data.log 2>&1
 '''
     exec_command_and_check(args.target_ip, spark_submit_cmd)
     if not check_job_status(args.target_ip, job_name):
+        raise Exception(f"spark job run failed. [job_name={job_name}]")
+
+def start_spark_job_with_param(target_ip, data_path, work_path, script_dir, id2_data_count, id3_data_count, parallel):
+    # 创建数据目录
+    exec_command_and_check(target_ip, f"hdfs dfs -mkdir -p {data_path}")
+    # 检查是否有任务正在跑
+    job_name_prefix = "gen_daily_benchmark_basic_data"
+    job_name = job_name_prefix + str(int(time.time() * 1000))
+    kill_running_job(target_ip, job_name_prefix)
+    # 产出数据
+    spark_submit_cmd = f'''
+export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
+export PYSPARK_PYTHON=/usr/bin/python3 && \
+cd {work_path} && \
+{work_path}/dlc_spark3/spark-3.1.2-bin-hadoop3.2/bin/spark-submit \
+  --name {job_name} \
+  --master yarn \
+  --deploy-mode client \
+  --executor-memory "2G"  \
+  --driver-memory "1G" \
+  --num-executors "{int(int(parallel) / 2)}" \
+  --executor-cores "2" \
+  --py-files daily_build_data_gen.zip \
+  {script_dir}/generate_benchmark_basic_data.py \
+  -id2_data_count {id2_data_count} \
+  -id3_data_count {id3_data_count} \
+  -data_path {data_path}  >> gen_data.log 2>&1
+'''
+    exec_command_and_check(target_ip, spark_submit_cmd)
+    if not check_job_status(target_ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
 
 
@@ -123,6 +152,27 @@ def process(args):
     # 推送结果
     push_result(args, result)
 
+def process_with_param(target_ip, id2_data_count, id3_data_count):
+    ip_list = get_ips_from_hosts(target_ip)
+    parallel = 5 * len(ip_list)
+    start_time = time.time()
+    print("开始构造压测基础数据........")
+    try:
+        # 1、初始化 spark 运行环境
+        data_path = "hdfs:///sa/runtime/daily_benchmark_basic_data"
+        work_path = "/home/sa_cluster/import_data_benchmark"
+        script_dir = "daily_build_data_gen"
+        install_requests(ip_list)
+        install_spark(target_ip, work_path, script_dir)
+        send_code(target_ip, work_path, script_dir)
+
+        # 2、开始造数据任务
+        start_spark_job_with_param(target_ip, data_path, work_path, script_dir, id2_data_count, id3_data_count, parallel)
+    except Exception as e:
+        print(str(e))
+        raise e
+    print(f"构造压测基础数据完成, 耗时: {int(time.time() - start_time)} 秒")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -134,7 +184,6 @@ if __name__ == "__main__":
     parser.add_argument('-tag', type=str, default='默认', help='自定义标记')
 
     # 生成数据的参数，会透传
-    parser.add_argument('-engine_type', type=str, default="default", help='数据集供哪种引擎使用')
     parser.add_argument('-id2_data_count', type=int, default=1000000, help='id2 场景下各数据集生成的数据量')
     parser.add_argument('-id3_data_count', type=int, default=0, help='id3 场景下各数据集生成的数据量')
     parser.add_argument('-data_path', type=str, default="hdfs:///sa/runtime/daily_benchmark_basic_data", help='数据存放目录')

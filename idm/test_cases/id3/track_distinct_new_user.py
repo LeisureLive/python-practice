@@ -12,11 +12,11 @@ true = True
 
 class IdmTrackV3DistinctNewUserCase(TestCase):
 
-    def __init__(self, idm_engine_type):
+    def __init__(self):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/{idm_engine_type}/id3/anonymous_new_track"
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/id3/anonymous_new_track"
         self.data_type = "track"
         self.cost = 0
 

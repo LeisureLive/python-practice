@@ -12,11 +12,11 @@ true = True
 
 class IdmProfileSetV2DistinctOldAnonymousUserCase(TestCase):
 
-    def __init__(self, idm_engine_type):
+    def __init__(self):
         super().__init__()
         self.work_path = "/home/sa_cluster/import_data_benchmark"
         self.script_path = "daily_build_data_gen"
-        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/{idm_engine_type}/id2/anonymous_old_profile_set"
+        self.basic_data_path = f"hdfs:///sa/runtime/daily_benchmark_basic_data/id2/anonymous_old_profile_set"
         self.data_type = "profile_set"
         self.cost = 0
 
@@ -28,7 +28,7 @@ class IdmProfileSetV2DistinctOldAnonymousUserCase(TestCase):
                         target_ips, project, self.basic_data_path, self.data_type)
         print("导入 profile_set(匿名老用户, 125 个属性 version=2.0) 数据完成, 数据量={}".format(count))
 
-    def collect_qps(self, exec_ip, data_count):
-        qps_detail = collect_sdi_qps(exec_ip, data_count)
+    def collect_qps(self, exec_ip, case_start_time):
+        qps_detail = collect_sdi_qps(exec_ip, case_start_time)
         qps_detail['title'] = "profile_set (匿名老用户, 125个属性)"
         return qps_detail
