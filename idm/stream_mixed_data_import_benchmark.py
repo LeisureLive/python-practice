@@ -22,7 +22,7 @@ def process(args):
     # 测试机工作目录
     work_path = "/home/sa_cluster/hj"
     script_dir = "data_gen"
-    skip_init = args.skip_init == "true"
+    skip_init = args.skip_optimize == "true"
     data_storage_ip = args.data_storage_ip
     data_storage_ip_list = common_tools.get_ips_from_hosts(data_storage_ip)
     target_ip = args.target_ip

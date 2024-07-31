@@ -967,6 +967,8 @@ def check_sdi_qps(ip, start_time, end_time):
 def get_average_of_max_n_elements(lst, n):
     # 确保n不会超过列表的长度
     n = min(n, len(lst))
+    if n == 0:
+        return 0
     # 获取最大的n个元素
     max_n_elements = sorted(lst, reverse=True)[:n]
     # 计算平均值

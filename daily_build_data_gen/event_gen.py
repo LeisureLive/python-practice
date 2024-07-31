@@ -115,6 +115,7 @@ class EventGen:
             ret['identities']['$identity_taobao_ouid'] = 'taobao_ouid_' + random_uuid + current_timestamp
         # 填充 properties
         properties = {}
+        properties['$lib'] = "Java"
         for key, value in self.schema.items():
             if key == "properties":
                 for name, data_type in value.items():
@@ -130,6 +131,7 @@ class EventGen:
         prop_index = self.EVENT_PROP_INDEX_MAP[event]
 
         properties = {}
+        properties['$lib'] = "Java"
         for key, value in self.schema.items():
             if key == "properties":
                 for name, data_type in value.items():
@@ -166,10 +168,3 @@ class EventGen:
 
     def _check_property_in_event(self, prop_index, property_name):
         return property_name.endswith("_" + str(prop_index))
-
-    def filter_identity_info(self, row):
-        del row['properties']
-        del row['type']
-        del row['event']
-        del row['time']
-        return row

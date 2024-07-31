@@ -2,30 +2,29 @@ import argparse
 import json
 import subprocess
 import time
+import traceback
 import uuid
 import os
 import requests
 import sys
-
 sys.path.append('../')
 from idm import idm_benchmark, gen_basic_data
 from idm.tools import common_tools
 
-
 def exec_command_and_check(ip, cmd):
     return common_tools.exec_command_and_check(ip, f"su - sa_cluster -c '{cmd}'")
 
-
 def exec_command(ip, cmd):
     return common_tools.exec_command(ip, f"su - sa_cluster -c '{cmd}'")
-
 
 def process(param):
     # 测试机工作目录
     work_path = "/home/sa_cluster/mock_data"
     script_dir = "data_gen"
-    skip_init = param.skip_init == "true"
-    exec_ip = param.target_ip
+    skip_init = param.skip_optimize == "true"
+    skip_gen_data = param.skip_gen_data == "true"
+    skip_import_data = param.skip_import_data == "true"
+    exec_ip = param.ip
     project = param.project
     env_version = common_tools.get_env_version(exec_ip)
     try:
@@ -38,23 +37,31 @@ def process(param):
         # 4、生成数据
         gen_basic_data.install_spark(exec_ip, work_path, script_dir)
         gen_basic_data.send_code(exec_ip, work_path, script_dir)
-        profile_set_file = start_spark_job(param, work_path, script_dir, "profile_set")
-        track_file = start_spark_job(param, work_path, script_dir, "track")
-        # profile_set_file = gen_data_file(param.ip, param.id_mode, "profile_set", "where login_id is not null")
-        # track_file = gen_data_file(param.ip, param.id_mode, "track", "")
+        profile_set_file = start_spark_job(param, work_path, script_dir, "profile_set", skip_gen_data)
+        track_file = start_spark_job(param, work_path, script_dir, "track", skip_gen_data)
         # 5、开始导入
-        profile_set_result = exec_importer(param.target_ip, param.project, profile_set_file)
-        track_result = exec_importer(param.target_ip, param.project, track_file)
-        result = build_result(profile_set_result, track_result)
+        if skip_import_data:
+            result = "生成数据成功，跳过导入！"
+        else:
+            if param.import_mode == "importer":
+                profile_set_result = exec_importer(param.ip, param.project, param.importer_parallel, profile_set_file)
+                track_result = exec_importer(param.ip, param.project, param.importer_parallel, track_file)
+                result = build_result(profile_set_result, track_result)
+            else:
+                profile_set_result = exec_hdfs_importer(param.ip, param.project, param.importer_parallel, profile_set_file, work_path)
+                track_result = exec_hdfs_importer(param.ip, param.project, param.importer_parallel, track_file, work_path)
+                result = build_result_for_hdfs_importer(profile_set_result, track_result)
     except Exception as e:
-        print(str(e))
+        print(e)
+        traceback.print_exc()
         result = f"出现异常: {str(e)}"
     # 6、输出数据
     push_result(param, result)
 
-
-def start_spark_job(args, work_path, script_dir, data_type):
-    output_path = f"/sa/runtime/normal_case_benchmark_temp/{data_type}"
+def start_spark_job(args, work_path, script_dir, data_type, skip_gen_data):
+    output_path = f"{args.json_data_path}/{data_type}"
+    if skip_gen_data:
+        return output_path
     if data_type == "profile_set":
         condition = "login_id is not null"
         data_path = f"{args.data_path}/user_data"
@@ -62,12 +69,13 @@ def start_spark_job(args, work_path, script_dir, data_type):
         condition = ""
         data_path = f"{args.data_path}/event_login_data"
 
+    exec_command(args.ip, "skvadmin balance start -m skv_offline")
     # 创建数据目录
-    exec_command_and_check(args.target_ip, f"hdfs dfs -mkdir -p {output_path}")
+    exec_command_and_check(args.ip, f"hdfs dfs -mkdir -p {output_path}")
     # 检查是否有任务正在跑
     job_name_prefix = "convert_basic_data_spark_job"
-    job_name = job_name_prefix + str(int(time.time() * 1000))
-    gen_basic_data.kill_running_job(args.target_ip, job_name_prefix)
+    job_name = job_name_prefix+str(int(time.time() * 1000))
+    gen_basic_data.kill_running_job(args.ip, job_name_prefix)
     # 产出数据
     spark_submit_cmd = f'''
 export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
@@ -79,7 +87,7 @@ cd {work_path} && \
   --deploy-mode client \
   --executor-memory "2G"  \
   --driver-memory "1G" \
-  --num-executors "{int(int(args.data_prepare_parallel) / 2)}" \
+  --num-executors "{int(int(args.data_prepare_parallel)/2)}" \
   --executor-cores "2" \
   --py-files data_gen.zip \
   {script_dir}/json_converter.py \
@@ -88,29 +96,31 @@ cd {work_path} && \
   -condition "{condition}" \
   -data_path {data_path} \
   -output_path {output_path} \
+  -compression {args.compression} \
    >> gen_data.log 2>&1
 '''
-    exec_command_and_check(args.target_ip, spark_submit_cmd)
-    if not gen_basic_data.check_job_status(args.target_ip, job_name):
+    exec_command_and_check(args.ip, spark_submit_cmd)
+    if not gen_basic_data.check_job_status(args.ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
     return output_path
-
 
 def build_result(profile_set_result, track_result):
     result = ""
     result += "\n" + "===== profile_set_result ====="
-    result += "\n" + f"【数据总量: {profile_set_result['all_read_count']}】"
-    result += "\n" + f"【入库数量: {profile_set_result['all_import_count']}】"
-    result += "\n" + f"【无效数量: {profile_set_result['all_skipped_count']}】"
-    result += "\n" + f"【QPS: {int(profile_set_result['all_read_count']) / int(profile_set_result['cost'])}】"
+    result += "\n" + f"【cost: {int(profile_set_result['cost'])}】"
     result += "\n" + "===== track_result ====="
-    result += "\n" + f"【数据总量: {track_result['all_read_count']}】"
-    result += "\n" + f"【入库数量: {track_result['all_import_count']}】"
-    result += "\n" + f"【无效数量: {track_result['all_skipped_count']}】"
-    result += "\n" + f"【QPS: {int(track_result['all_read_count']) / int(track_result['cost'])}】"
+    result += "\n" + f"【cost: {int(track_result['cost'])}】"
     result += "\n" + "=========="
     return result
 
+def build_result_for_hdfs_importer(profile_set_result, track_result):
+    result = ""
+    result += "\n" + "===== profile_set_result ====="
+    result += "\n" + f"【cost: {int(profile_set_result['cost'])}】"
+    result += "\n" + "===== track_result ====="
+    result += "\n" + f"【cost: {int(track_result['cost'])}】"
+    result += "\n" + "=========="
+    return result
 
 def push_result(args, result):
     if len(result) > 30000:
@@ -128,36 +138,52 @@ def push_result(args, result):
     result = wx_request.json()
     print(result)
 
-
 def build_common_msg(args, result):
-    msg = "【数据接入场景测试-批导入】"
+    msg = f"【数据接入场景测试-批导入-{args.import_mode}】"
     msg += "\n" + f"【tag: {args.tag}】"
-    msg += "\n" + f"【ip: {args.target_ip}】"
-    msg += "\n" + f"【id_mode: {args.id_mode}】"
-    msg += "\n" + f"【idm_engine_type: {args.idm_engine_type}】"
+    msg += "\n" + f"【args: {args}】"
     msg += "\n" + result
     msg += "\n" + f"[构建地址]({args.build_url})"
     return msg
 
 
-def exec_importer(ip, project, hdfs_path):
+def exec_importer(ip, project, importer_parallel, hdfs_path,):
+    horizon_version = common_tools.get_horizon_version(ip)
+    if horizon_version.startswith('1.3.1'):
+        exec_command(ip, "aradmin config set server -p integrator -m scheduler -n job_manager_tm_mem_mb -v 2048")
+        exec_command(ip, "aradmin restart -p integrator -m scheduler")
+        pass
+    else:
+        exec_command(ip, "aradmin pause -p horizon -m stream_manager -d 86400")
     temp_name = str(uuid.uuid4())
     cluster = common_tools.check_is_cluster(ip)
     if not cluster:
         raise Exception("not support.")
     else:
-        cmd = f"integratoradmin importer run --project {project} --path hdfs://{hdfs_path} --parallelism 3 --yjm 2048 --ytm 4096 --job_name {temp_name}"
+        cmd = f"integratoradmin importer run --project {project} --path {hdfs_path} --parallelism {importer_parallel} --yjm 2048 --ytm 4096 --job_name {temp_name}"
     start_time = time.time()
     exec_command_and_check(ip, cmd)
     cost = time.time() - start_time
-    check_cmd = f'''metadb_cli -usc_dba -D metadata --skip-column-names <<< "select counter_info from integrator_importer_record where job_name=\\"{temp_name}\\""'''
+    check_cmd = f'''metadb_cli -usc_dba -D metadata --skip-column-names <<< "select status from integrator_import_task where name=\\"{temp_name}\\""'''
     check_result = exec_command(ip, check_cmd)
-    if check_result.strip() == "NULL":
+    if check_result.strip() != "SUCCEED":
         raise Exception(f"import job run failed. [job_name={temp_name}]")
-    json_result = json.loads(check_result)
+    json_result = {}
     json_result['cost'] = cost
     return json_result
 
+
+def exec_hdfs_importer(ip, project, importer_parallel, hdfs_path, work_path):
+    cluster = common_tools.check_is_cluster(ip)
+    if not cluster:
+        raise Exception("not support.")
+    else:
+        cmd = f"hdfs_importer --project {project} --path {hdfs_path.replace('hdfs://', '')} --mapper_max_memory_size_mb 8192 --reduce_max_memory_size_mb 8192 --event_mapper_max_size {importer_parallel} --item_mapper_max_size {importer_parallel} --profile_mapper_max_size {importer_parallel} >> {work_path}/hdfs_importer.log 2>&1"
+    start_time = time.time()
+    exec_command_and_check(ip, cmd)
+    cost = time.time() - start_time
+    json_result = {'cost': cost}
+    return json_result
 
 def gen_data_file(ip, id_mode, data_type, condition):
     hdfs_file_path = f"/sa/runtime/normal_case_benchmark_temp/{data_type}"
@@ -206,7 +232,6 @@ def exec_sql(ip, sql):
     cmd = f"impala-shell -d default -f {sql_file}"
     exec_command_and_check(ip, cmd)
 
-
 def gen_temp_sql_file(ip, sql):
     temp_path = "/tmp/normal_case_benchmark_temp.sql"
     with open(temp_path, "w") as f:
@@ -226,7 +251,13 @@ if __name__ == '__main__':
     parser.add_argument('-project', type=str, default='xwc_test', help='导入项目名')
     parser.add_argument('-id_mode', type=str, default='id2', help='id2 / id3')
     parser.add_argument('-idm_engine_type', type=str, default='default', help='default/fast_mode')
+    parser.add_argument('-importer_parallel', type=str, default='3', help='importer 并行度')
+    parser.add_argument('-import_mode', type=str, default='importer', help='importer/hdfs_importer')
 
     parser.add_argument('-data_path', type=str, default='hdfs:///sa/runtime/test', help='数据存放目录，三种数据名字先写死了')
+    parser.add_argument('-json_data_path', type=str, default='hdfs:///sa/runtime/normal_case_benchmark_temp', help='json 存放目录，数据名字先写死了')
     parser.add_argument('-data_prepare_parallel', type=str, default='24', help='准备数据时，启动的 executor 线程数，每个占 1C/1G')
+    parser.add_argument('-compression', type=str, default="default", help='压缩格式，default 标识不压缩，gzip 标识gzip压缩')
+    parser.add_argument('-skip_gen_data', type=str, default="false", help='跳过生成 json 数据')
+    parser.add_argument('-skip_import_data', type=str, default="false", help='跳过数据导入测试')
     process(parser.parse_args())

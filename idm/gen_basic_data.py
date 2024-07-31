@@ -1,27 +1,21 @@
-import argparse
 import json
-import os
 import subprocess
+import argparse
 import sys
 import time
-
+import os
 import requests
-
 sys.path.append('../')
 from idm.tools import common_tools
-
 
 def exec_command_and_check(ip, cmd):
     return common_tools.exec_command_and_check(ip, f"su - sa_cluster -c '{cmd}'")
 
-
 def exec_command_with_root_and_check(ip, cmd):
     return common_tools.exec_command_and_check(ip, f"{cmd}")
 
-
 def exec_command(ip, cmd):
     return common_tools.exec_command(ip, f"su - sa_cluster -c '{cmd}'")
-
 
 def kill_running_job(ip, job_name_prefix):
     running_app_ids = exec_command(ip, f"yarn app -list 2>/dev/null|grep {job_name_prefix}").strip()
@@ -31,7 +25,6 @@ def kill_running_job(ip, job_name_prefix):
             print(f"find running app. [app={app}]")
             exec_command_and_check(ip, f"yarn app -kill {app_id}")
 
-
 # 多检查一次
 def check_job_status(ip, job_name):
     ret = exec_command(ip, f"yarn app -list -appStates ALL 2>/dev/null|grep {job_name}")
@@ -40,6 +33,12 @@ def check_job_status(ip, job_name):
         return True
     return False
 
+def install_requests(ip_list):
+    for ip in ip_list:
+        exec_command_with_root_and_check(ip,
+                                         "/usr/bin/python3 -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple")
+        exec_command_with_root_and_check(ip,
+                                         "/usr/bin/python3 -m pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple")
 
 def install_spark(ip, work_path, script_dir):
     exec_command_and_check(ip, f"mkdir -p {work_path}/{script_dir}")
@@ -49,17 +48,9 @@ def install_spark(ip, work_path, script_dir):
     packages = exec_command_and_check(ip, f"ls {work_path}").strip().split("\n")
     if "dlc_spark3-1.0.0.2.tar" not in packages:
         exec_command_and_check(ip,
-                               f"cd {work_path} && wget http://download.sensorsdata.cn/dragon/artifactory/dragon-release/com.sensorsdata.sps/dlc_spark3/dlc_spark3-1.0.0.2.tar")
+                     f"cd {work_path} && wget http://download.sensorsdata.cn/dragon/artifactory/dragon-release/com.sensorsdata.sps/dlc_spark3/dlc_spark3-1.0.0.2.tar")
     if "dlc_spark3" not in packages:
         exec_command_and_check(ip, f"cd {work_path} && tar -xf dlc_spark3-1.0.0.2.tar")
-
-
-def install_requests(ip_list):
-    for ip in ip_list:
-        exec_command_with_root_and_check(ip,
-                                         "/usr/bin/python3 -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple")
-        exec_command_with_root_and_check(ip,
-                                         "/usr/bin/python3 -m pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple")
 
 
 def send_code(ip, work_path, script_dir):
@@ -71,14 +62,13 @@ def send_code(ip, work_path, script_dir):
         for file in files:
             common_tools.cp_to(ip, f"{script_bin_dir}/{script_dir}/{file}", f"{work_path}/{script_dir}/{file}")
 
-
 def start_spark_job(args, work_path, script_dir):
     # 创建数据目录
-    exec_command_and_check(args.target_ip, f"hdfs dfs -mkdir -p {args.data_path}")
+    exec_command_and_check(args.ip, f"hdfs dfs -mkdir -p {args.data_path}")
     # 检查是否有任务正在跑
     job_name_prefix = "gen_basic_data_spark_job"
-    job_name = job_name_prefix + str(int(time.time() * 1000))
-    kill_running_job(args.target_ip, job_name_prefix)
+    job_name = job_name_prefix+str(int(time.time() * 1000))
+    kill_running_job(args.ip, job_name_prefix)
     # 产出数据
     spark_submit_cmd = f'''
 export HADOOP_CONF_DIR=$(aradmin config get global -n hadoop_conf_path -w literal) && \
@@ -90,7 +80,7 @@ cd {work_path} && \
   --deploy-mode client \
   --executor-memory "2G"  \
   --driver-memory "1G" \
-  --num-executors "{int(int(args.parallel) / 2)}" \
+  --num-executors "{int(int(args.parallel)/2)}" \
   --executor-cores "2" \
   --py-files data_gen.zip \
   {script_dir}/gen_import_data.py \
@@ -103,10 +93,9 @@ cd {work_path} && \
   -event_login_count {args.event_login_count} \
   -event_mixed_count {args.event_mixed_count} >> gen_data.log 2>&1
 '''
-    exec_command_and_check(args.target_ip, spark_submit_cmd)
-    if not check_job_status(args.target_ip, job_name):
+    exec_command_and_check(args.ip, spark_submit_cmd)
+    if not check_job_status(args.ip, job_name):
         raise Exception(f"spark job run failed. [job_name={job_name}]")
-
 
 def create_table(ip, data_path, script_path):
     path_expr = data_path.replace("/", "\\/")
@@ -124,20 +113,19 @@ def process(args):
     result = "构造成功！"
     start_time = time.time()
     try:
-        install_spark(args.target_ip, work_path, script_dir)
+        install_spark(args.ip, work_path, script_dir)
         # 把代码传到机器上
-        send_code(args.target_ip, work_path, script_dir)
+        send_code(args.ip, work_path, script_dir)
         # 开始造数据任务
         start_spark_job(args, work_path, script_dir)
         # 开始创建表
-        create_table(args.target_ip, args.data_path, work_path + "/" + script_dir)
+        create_table(args.ip, args.data_path, work_path+"/"+script_dir)
     except Exception as e:
         print(str(e))
         result = f"出现异常: {str(e)}"
     result += f"耗时: {int(time.time() - start_time)} 秒"
     # 推送结果
     push_result(args, result)
-
 
 def push_result(args, result):
     header = {'content-type': 'application/json'}
@@ -150,11 +138,10 @@ def push_result(args, result):
     result = wx_request.json()
     print(result)
 
-
 def build_common_msg(args, result):
     msg = "【基础数据构造工具】"
     msg += "\n" + f"【tag: {args.tag}】"
-    msg += "\n" + f"【ip: {args.target_ip}】"
+    msg += "\n" + f"【ip: {args.ip}】"
     msg += "\n" + f"【并行度: {args.parallel}】"
     msg += "\n" + f"【importer 导入历史用户量: {args.user_count}】"
     msg += "\n" + f"【login 事件量: {args.event_login_count}】"
@@ -170,7 +157,6 @@ def build_common_msg(args, result):
     msg += "\n" + "=========="
     msg += "\n" + f"[构建地址]({args.build_url})"
     return msg
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -191,3 +177,6 @@ if __name__ == "__main__":
     parser.add_argument('-event_login_count', type=int, default=200000000, help='login 事件量')
     parser.add_argument('-event_mixed_count', type=int, default=22000000, help='混合事件量')
     process(parser.parse_args())
+
+
+

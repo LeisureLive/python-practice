@@ -26,7 +26,7 @@ from idm.test_cases.id3.track_distinct_old_user import IdmTrackV3DistinctOldUser
 from idm.tools.common_tools import get_ips_from_hosts, get_env_version, optimize_skv, open_idm_optimize_trigger, \
     create_new_project, \
     check_is_cluster, get_sdi_version, get_horizon_version, get_sdf_version, pause_import_and_wait_consume_latency, \
-    optimize_kafka, balance_skv, start_import_and_pause_handler, start_handler, start_grafana, \
+    optimize_kafka, balance_skv, start_grafana, \
     get_prometheus_ip, pause_edge, wait_profile_stream_consume_latency, pause_handler_and_start_edge, \
     check_edge_latency_and_start_handler
 from idm.tools.email_tool import send_benchmark_result
@@ -145,13 +145,14 @@ if __name__ == '__main__':
     parser.add_argument('-build_user_id', type=str, default='hejie', help='build_user_id')
     parser.add_argument('-target_ip', type=str, default='10.129.26.245', help='target ip')
     parser.add_argument('-webhook', type=str, default='', help='webhook')
-    parser.add_argument('-id2_mode_data_count', type=int, default=1500000, help='id2_mode_data_count')
-    parser.add_argument('-id3_mode_data_count', type=int, default=1200000, help='id3_mode_data_count')
+    parser.add_argument('-id2_mode_data_count', type=int, default=0, help='id2_mode_data_count')
+    parser.add_argument('-id3_mode_data_count', type=int, default=0, help='id3_mode_data_count')
     parser.add_argument('-id2_mode_project_name', type=str, default='benchmark_id2', help='id2_mode_project_name')
     parser.add_argument('-id3_mode_project_name', type=str, default='benchmark_id3', help='id3_mode_project_name')
     parser.add_argument('-idm_engine_type', type=str, default='default', help='default/fast_mode')
     parser.add_argument('-skip_gen_data', type=str, default="false", help='跳过造数')
-    parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
+    parser.add_argument('-skip_optimize', type=str, default="false", help='跳过环境参数调优')
+    parser.add_argument('-skip_create_project', type=str, default="false", help='跳过项目初始化')
     parser.add_argument('-import_mode', type=str, default="chain",
                         help='导入模式：chain / hdfs_importer / importer / importer_v2')
     parser.add_argument('-result_delivery_method', type=str, default="push",
@@ -162,7 +163,8 @@ if __name__ == '__main__':
     # 0、解析参数
     target_ip = args.target_ip
     skip_gen_data = args.skip_gen_data == 'true'
-    skip_init = args.skip_init == "true"
+    skip_optimize = args.skip_optimize == "true"
+    skip_create_project = args.skip_create_project == "true"
     import_mode = args.import_mode
     target_ip_list = get_ips_from_hosts(target_ip)
     print("target_ip_list = %s" % target_ip_list)
@@ -181,10 +183,10 @@ if __name__ == '__main__':
     env_version = get_env_version(target_ip)
 
     # 1、对 skv 内存进行调优
-    optimize_skv(target_ip, skip_init)
+    optimize_skv(target_ip, skip_optimize)
     # 2、尝试开启 idm 的优化开关, 非特定版本可能会出现开启失败情况
-    open_idm_optimize_trigger(target_ip, env_version, skip_init)
-    optimize_kafka(target_ip, env_version, skip_init)
+    open_idm_optimize_trigger(target_ip, env_version, skip_optimize)
+    optimize_kafka(target_ip, env_version, skip_optimize)
     start_grafana(target_ip)
     prometheus_ip = get_prometheus_ip(target_ip)
     print(f"prometheus_ip = {prometheus_ip}")
@@ -198,7 +200,7 @@ if __name__ == '__main__':
     id2_project_qps_list = []
     if id2_mode_data_count > 0:
         # 尝试创建项目, 已存在不会报错
-        create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_init)
+        create_new_project(target_ip, env_version, id2_mode_project_name, 'id2', idm_engine_type, skip_create_project)
         # 尝试执行 skv balance, 避免数据不均衡
         balance_skv(target_ip)
         test_cases = [
@@ -228,7 +230,7 @@ if __name__ == '__main__':
     # 5、对 id3 项目进行测试
     id3_project_qps_list = []
     if id3_mode_data_count > 0:
-        create_new_project(target_ip, env_version, id3_mode_project_name, 'id3', idm_engine_type, skip_init)
+        create_new_project(target_ip, env_version, id3_mode_project_name, 'id3', idm_engine_type, skip_create_project)
         # 尝试执行 skv balance, 避免数据不均衡
         balance_skv(target_ip)
         test_cases = [

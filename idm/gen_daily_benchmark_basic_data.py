@@ -154,7 +154,7 @@ def process(args):
 
 def process_with_param(target_ip, id2_data_count, id3_data_count):
     ip_list = get_ips_from_hosts(target_ip)
-    parallel = 5 * len(ip_list)
+    parallel = 6 * len(ip_list)
     start_time = time.time()
     print("开始构造压测基础数据........")
     try:
