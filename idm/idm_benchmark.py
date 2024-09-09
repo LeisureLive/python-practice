@@ -72,13 +72,12 @@ def push_result(ip_list, env_version, idm_engine_type, build_user_id, build_url,
     cucumber_dict.update({"执行模式": import_mode})
     cucumber_dict.update({"机器 IP": ip_list})
 
-    is_cluster = check_is_cluster(ip_list[0])
-    node_num = len(ip_list)
-    if env_version == 'new':
+    if env_version != 'old-env':
         cucumber_dict.update({"环境类型": "SDH 架构"})
-        sdi_version = get_sdi_version(ip_list[0])
+        if env_version == 'SDH-131':
+            sdi_version = get_sdi_version(ip_list[0])
+            cucumber_dict.update({'sdi 版本': sdi_version})
         horizon_version = get_horizon_version(ip_list[0])
-        cucumber_dict.update({'sdi 版本': sdi_version})
         cucumber_dict.update({'horizon 版本': horizon_version})
         if idm_engine_type == 'default':
             id2_engine_name = "[兼容模式] "
@@ -99,30 +98,16 @@ def push_result(ip_list, env_version, idm_engine_type, build_user_id, build_url,
         key = id2_engine_name + str(case_qps['title'])
         if import_mode != "chain":
             value = " avg_qps=" + str(int(case_qps['avg_qps']))
-        elif is_cluster:
-            avg_qps = int(case_qps['avg_qps']) * node_num
-            max_qps = int(case_qps['max_qps']) * node_num
-            min_qps = int(case_qps['min_qps']) * node_num
-            value = " avg_qps=" + str(avg_qps) + ", max_qps=" + str(max_qps) \
-                    + ", min_qps=" + str(min_qps)
         else:
-            value = " avg_qps=" + case_qps['avg_qps'] + ", max_qps=" + case_qps['max_qps'] \
-                    + ", min_qps=" + case_qps['min_qps']
+            value = " avg_qps=" + case_qps['avg_qps'] + ", max_qps=" + case_qps['max_qps']
         cucumber_dict.update({key: value})
 
     for case_qps in id3_project_qps_list:
         key = id3_engine_name + str(case_qps['title'])
         if import_mode != "chain":
             value = " avg_qps=" + str(int(case_qps['avg_qps']))
-        elif is_cluster:
-            avg_qps = int(case_qps['avg_qps']) * node_num
-            max_qps = int(case_qps['max_qps']) * node_num
-            min_qps = int(case_qps['min_qps']) * node_num
-            value = " avg_qps=" + str(avg_qps) + ", max_qps=" + str(max_qps) \
-                    + ", min_qps=" + str(min_qps)
         else:
-            value = " avg_qps=" + case_qps['avg_qps'] + ", max_qps=" + case_qps['max_qps'] \
-                    + ", min_qps=" + case_qps['min_qps']
+            value = " avg_qps=" + case_qps['avg_qps'] + ", max_qps=" + case_qps['max_qps']
         cucumber_dict.update({key: value})
 
     markdown_dict = {}

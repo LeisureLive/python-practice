@@ -21,7 +21,7 @@ def process(param):
     # 测试机工作目录
     work_path = "/home/sa_cluster/mock_data"
     script_dir = "data_gen"
-    skip_init = param.skip_optimize == "true"
+    skip_init = param.skip_init == "true"
     skip_gen_data = param.skip_gen_data == "true"
     skip_import_data = param.skip_import_data == "true"
     exec_ip = param.ip
@@ -164,7 +164,7 @@ def exec_importer(ip, project, importer_parallel, hdfs_path,):
     start_time = time.time()
     exec_command_and_check(ip, cmd)
     cost = time.time() - start_time
-    check_cmd = f'''metadb_cli -usc_dba -D metadata --skip-column-names <<< "select status from integrator_import_task where name=\\"{temp_name}\\""'''
+    check_cmd = f'''metadb_cli -usc_dba -D horizon_db --skip-column-names <<< "select status from integrator_import_task where name=\\"{temp_name}\\""'''
     check_result = exec_command(ip, check_cmd)
     if check_result.strip() != "SUCCEED":
         raise Exception(f"import job run failed. [job_name={temp_name}]")

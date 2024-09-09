@@ -34,7 +34,6 @@ def send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps
     if receiver_addrs is None:
         receiver_addrs = 'hejie@sensorsdata.cn'
 
-    cluster_size = len(ip_list)
     if env_version != 'old-env':
         if idm_engine_type == 'default':
             id2_mode = '[兼容模式多对一] '
@@ -48,16 +47,16 @@ def send_benchmark_result(ip_list, env_version, idm_engine_type, id2_project_qps
     # 测试结果
     table = PrettyTable(['数据集', 'avg_qps', 'max_qps'])
     for case_qps in id2_project_qps_list:
-        avg_qps = int(case_qps['avg_qps']) * cluster_size
-        max_qps = int(case_qps['max_qps']) * cluster_size
+        avg_qps = int(case_qps['avg_qps'])
+        max_qps = int(case_qps['max_qps'])
         table.add_row([id2_mode + case_qps['title'], avg_qps, max_qps])
     for case_qps in id3_project_qps_list:
-        avg_qps = int(case_qps['avg_qps']) * cluster_size
-        max_qps = int(case_qps['max_qps']) * cluster_size
+        avg_qps = int(case_qps['avg_qps'])
+        max_qps = int(case_qps['max_qps'])
         table.add_row([id3_mode + case_qps['title'], avg_qps, max_qps])
     for case_qps in mock_idm_case_qps_list:
-        avg_qps = int(case_qps['avg_qps']) * cluster_size
-        max_qps = int(case_qps['max_qps']) * cluster_size
+        avg_qps = int(case_qps['avg_qps'])
+        max_qps = int(case_qps['max_qps'])
         table.add_row(["[Mock IDM] " + case_qps['title'], avg_qps, max_qps])
 
     data_html = table.get_html_string()

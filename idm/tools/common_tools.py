@@ -683,7 +683,7 @@ def check_edge_latency_and_start_handler(target_ip_list, env_version):
     print("检查 edge 延迟情况")
     wait_edge_consume_latency(target_ip_list)
     ip = target_ip_list[0]
-    print("检查 edge 无延迟, 开始数据处理")
+    print("开始 process-chain 数据处理")
     if env_version == 'SDH-131':
         start_module(ip, "integrator", "scheduler")
     elif env_version == 'SDH-132':
@@ -708,20 +708,20 @@ def wait_edge_consume_latency(target_ip_list):
         if match_total_latency_file_count_group:
             total_latency_file_count = int(match_total_latency_file_count_group.group(1))
 
-        if total_latency_size <= 50000 * len(target_ip_list) and total_latency_file_count == 0:
+        if total_latency_size <= 200000 * len(target_ip_list) and total_latency_file_count == 0:
             print("检测 edge 无延迟")
             break
-        elif i >= 15 and total_latency_size <= 100000 * len(target_ip_list):
+        elif i >= 9 and total_latency_size <= 400000 * len(target_ip_list):
             print("检测 edge 无延迟")
             break
-        elif i >= 120:
-            print("检测 edge 存在延迟, 已等待超过40分钟, 请检查服务状态!")
+        elif i >= 12:
+            print("检测 edge 存在延迟, 但已等待超过2分钟, 可开启导入流处理堆积的数据!")
             i = i + 1
-            time.sleep(20)
+            time.sleep(10)
         else:
             i = i + 1
-            print("检测 edge 存在延迟, 已等待 {}s".format(20 * i))
-            time.sleep(20)
+            print("检测 edge 存在延迟, 已等待 {}s".format(10 * i))
+            time.sleep(10)
 
 
 def start_handler(ip, env_version):
@@ -949,10 +949,10 @@ def check_sdi_qps(ip, start_time, end_time):
     metric_list = metric_result_json.get('data').get('result')
     qps_list = []
     for item in metric_list:
-         for value in item.get("values"):
-             # values 是一个list, 其中包含两个元素，第一个是时间戳，第二个是时间戳对应的指标值
-             if value[1] != '0':
-                 qps_list.append(int(float(value[1])))
+        for value in item.get("values"):
+            # values 是一个list, 其中包含两个元素，第一个是时间戳，第二个是时间戳对应的指标值
+            if value[1] != '0':
+                qps_list.append(int(float(value[1])))
 
     # 获取最大的 8个点计算平均值作为 QPS
     avg_qps = get_average_of_max_n_elements(qps_list, 8)

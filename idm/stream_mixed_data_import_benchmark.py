@@ -1,9 +1,8 @@
 import argparse
 import json
+import requests
 import sys
 import time
-
-import requests
 
 sys.path.append('../')
 from idm import idm_benchmark, gen_basic_data
@@ -22,7 +21,7 @@ def process(args):
     # 测试机工作目录
     work_path = "/home/sa_cluster/hj"
     script_dir = "data_gen"
-    skip_init = args.skip_optimize == "true"
+    skip_init = args.skip_init == "true"
     data_storage_ip = args.data_storage_ip
     data_storage_ip_list = common_tools.get_ips_from_hosts(data_storage_ip)
     target_ip = args.target_ip
@@ -43,10 +42,12 @@ def process(args):
         idm_benchmark.open_idm_optimize_trigger(target_ip, target_env_version, skip_init)
         idm_benchmark.create_new_project(target_ip, target_env_version, project, args.id_mode, args.idm_engine_type,
                                          skip_init)
-        exec_command_and_check(target_ip, "skvadmin balance start -m skv_offline")
+        exec_command(target_ip, "skvadmin balance start -m skv_offline")
+        exec_command_and_check(target_ip,
+                               "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable")
         # 3. 导入数据
         common_tools.pause_import_and_wait_consume_latency(target_ip, target_env_version)
-        common_tools.pause_edge(target_ip, target_env_version)
+        common_tools.start_import_and_pause_handler(target_ip, target_env_version)
         start_time = int(time.time())
         start_spark_job(args, work_path, script_dir, target_ips)
         end_time = int(time.time())
@@ -162,7 +163,7 @@ if __name__ == '__main__':
                         default='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=3a443a3b-e44c-4051-b3e0-3ed2084d7945',
                         help='webhook')
     parser.add_argument('-tag', type=str, default='老架构id2混合流导入', help='自定义标记')
-    parser.add_argument('-skip_init', type=str, default="true", help='跳过开关、项目初始化')
+    parser.add_argument('-skip_init', type=str, default="false", help='跳过开关、项目初始化')
     parser.add_argument('-project', type=str, default='import_data_test', help='导入项目名')
     parser.add_argument('-id_mode', type=str, default='id2', help='id2 / id3')
     parser.add_argument('-idm_engine_type', type=str, default='default', help='default/fast_mode')
