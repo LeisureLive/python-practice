@@ -13,7 +13,7 @@ sys.path.append("..")
 class UserGen:
     PROP_NAME_PREFIX = "property_user_"
     PROP_COUNT_MAP = {
-        DataType.STRING: 59,
+        DataType.STRING: 60,
         DataType.NUMBER: 30,
         DataType.NUMBER_WITH_DOUBLE: 20,
         DataType.BOOL: 5,
@@ -89,7 +89,6 @@ class UserGen:
 
         # 填充 properties
         properties = {}
-        properties['$lib'] = "Java"
         for key, value in self.schema.items():
             if key == "properties":
                 for name, data_type in value.items():
@@ -101,7 +100,6 @@ class UserGen:
     def gen_old_data(self, row):
         # 重新填充 properties
         properties = {}
-        properties['$lib'] = "Java"
         for key, value in self.schema.items():
             if key == "properties":
                 for name, data_type in value.items():

@@ -45,6 +45,8 @@ def process(param):
         else:
             if param.import_mode == "importer":
                 profile_set_result = exec_importer(param.ip, param.project, param.importer_parallel, profile_set_file)
+                # 需要等待 profile_stream_job 处理完成属性入库, 避免影响事件导入性能
+                common_tools.wait_profile_stream_consume_latency(param.ip, env_version)
                 track_result = exec_importer(param.ip, param.project, param.importer_parallel, track_file)
                 result = build_result(profile_set_result, track_result)
             else:
@@ -154,7 +156,7 @@ def exec_importer(ip, project, importer_parallel, hdfs_path,):
         exec_command(ip, "aradmin restart -p integrator -m scheduler")
         pass
     else:
-        exec_command(ip, "aradmin pause -p horizon -m stream_manager -d 86400")
+        exec_command(ip, "aradmin restart -p horizon -m stream_manager -d 86400")
     temp_name = str(uuid.uuid4())
     cluster = common_tools.check_is_cluster(ip)
     if not cluster:

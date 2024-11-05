@@ -17,7 +17,7 @@ class UserGen:
         DataType.NUMBER_WITH_DOUBLE: 10,
         DataType.BOOL: 4,
         DataType.DATETIME: 4,
-        DataType.LIST: 2,
+        DataType.LIST: 2
     }
 
     def __init__(self, user_count, login_percent, cookie_percent, mobile_percent, idfv_percent) -> None:
@@ -100,9 +100,10 @@ class UserGen:
 
 
 if __name__ == '__main__':
-    generator = UserGen(100, 0.9, 0.4,0.5,0.8)
+    generator = UserGen(100, 1,1,1,1)
     for i in range(0, 100):
         row = Row(id=i)
         data1 = generator.gen_data(row)
         print(data1)
+        print(json.dumps(data1))
         # print(generator.convert_to_csv(data1))

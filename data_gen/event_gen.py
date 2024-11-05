@@ -17,7 +17,7 @@ class EventGen:
         DataType.NUMBER_WITH_DOUBLE: 5,
         DataType.BOOL: 3,
         DataType.DATETIME: 3,
-        DataType.LIST: 1,
+        DataType.LIST: 1
     }
     EVENT_PROP_INDEX_MAP = {
         "WMemberPayResult": 1,
@@ -123,6 +123,8 @@ if __name__ == '__main__':
                               '$identity_anonymous_id': 'mobile_a8bdff69-a828-4f91-9ae6-be5f61865c04'},
      'anonymous_id': 'mobile_a8bdff69-a828-4f91-9ae6-be5f61865c04',
      'properties': {'property_user_list1': ['9ad40b5f-1762-4d17-9666-8707848a7f27']}}
-    generator = EventGen(100, 89)
-    print(generator.gen_data(row1))
-    print(generator.gen_data(row2))
+    generator = EventGen(100, 100)
+    print(generator.gen_data({'id': 99, 'login_id': 'login_1cb36f37-bf0a-4252-914d-03b4a2871455', 'identities': {'$identity_mobile': 'mobile_1cb36f37-bf0a-4252-914d-03b4a2871455', '$identity_idfv': 'device_1cb36f37-bf0a-4252-914d-03b4a2871455', '$identity_cookie_id': 'cookie_1cb36f37-bf0a-4252-914d-03b4a2871455', '$identity_anonymous_id': 'mobile_1cb36f37-bf0a-4252-914d-03b4a2871455'}, 'anonymous_id': 'mobile_1cb36f37-bf0a-4252-914d-03b4a2871455', 'properties': {'property_user_string1': '女', 'property_user_number1': 635, 'property_user_number_with_double1': 3312.9405330012582, 'property_user_bool1': True, 'property_user_datetime1': '2024-08-28 23:35:27.000000', 'property_user_list1': ['93b5a1dd-eba4-468b-b642-b26fc1eebe82', '5db97c18-817e-4f2a-a6b1-93333662b6e3', '43389326-aa8c-4ac5-8c76-a750c5dcd5fe', 'f0616441-60ba-45f4-8341-6cf69b9de7f7']}}
+))
+    print(json.dumps(generator.gen_data({'id': 99, 'login_id': 'login_1cb36f37-bf0a-4252-914d-03b4a2871455', 'identities': {'$identity_mobile': 'mobile_1cb36f37-bf0a-4252-914d-03b4a2871455', '$identity_idfv': 'device_1cb36f37-bf0a-4252-914d-03b4a2871455', '$identity_cookie_id': 'cookie_1cb36f37-bf0a-4252-914d-03b4a2871455', '$identity_anonymous_id': 'mobile_1cb36f37-bf0a-4252-914d-03b4a2871455'}, 'anonymous_id': 'mobile_1cb36f37-bf0a-4252-914d-03b4a2871455', 'properties': {'property_user_string1': '女', 'property_user_number1': 635, 'property_user_number_with_double1': 3312.9405330012582, 'property_user_bool1': True, 'property_user_datetime1': '2024-08-28 23:35:27.000000', 'property_user_list1': ['93b5a1dd-eba4-468b-b642-b26fc1eebe82', '5db97c18-817e-4f2a-a6b1-93333662b6e3', '43389326-aa8c-4ac5-8c76-a750c5dcd5fe', 'f0616441-60ba-45f4-8341-6cf69b9de7f7']}}
+)))

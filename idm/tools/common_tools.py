@@ -42,6 +42,8 @@ def get_env_version(ip):
         return 'SDH-131'
     elif horizon_version != 'unknown' and horizon_version >= '1.3.2':
         return 'SDH-132'
+    elif horizon_version != 'unknown' and horizon_version >= '1.3.0':
+        return 'SDH-130'
     else:
         return 'old-env'
 
@@ -318,7 +320,7 @@ def start_grafana(ip):
 def open_idm_optimize_trigger(ip, env_version, skip_init):
     if skip_init:
         return
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         open_idm_optimize_trigger_in_SDH_131(ip)
     elif env_version == 'SDH-132':
         open_idm_optimize_trigger_in_SDH_132(ip)
@@ -370,21 +372,11 @@ def open_idm_optimize_trigger_in_SDH_131(ip):
                  'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
-    if get_env_type(ip) == EnvType.MINI:
-        # 调整 yarn 内存到 26G, mini 集群默认是 23G
-        result = exec_command(ip,
-                              'su - sa_cluster -c "mothershipadmin config search -m yarn -k yarn.nodemanager.resource.memory-mb" ')
-        pattern = re.compile(r'role_config_group_nodemanager_\d+')
-        matches = pattern.search(result)
-        if matches:
-            role_group = matches.group()
-            cmd = f"mothershipadmin role_config_group config set -m yarn -r nodemanager --role_config_group {role_group} --namespace yarn-site -k yarn.nodemanager.resource.memory-mb -v 26624 --yes"
-            exec_command(ip, f'su - sa_cluster -c "{cmd}"')
-    else:
+    adjust_yarn_memory(ip)
+    if get_env_type(ip) == EnvType.SIMPLIFY:
         # 单机环境需要调整 scheduler 进程的内存大小
         exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -m scheduler -p integrator -n mem_mb -v 4096" ')
-
+                     'su - sa_cluster -c "aradmin config set server -m horizon -p stream_manager -n mem_mb -v 4096" ')
     restart_module(ip, "edge", "edge")
     restart_module(ip, "horizon", "identity_skv_proxy")
     restart_module(ip, "integrator", "scheduler")
@@ -419,7 +411,13 @@ def open_idm_optimize_trigger_in_SDH_132(ip):
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_engine_open_concurrent -v true --unstable" ')
     exec_command(ip,
-                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_direct_skv_thread_pool_size -v 8 --unstable" ')
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_direct_skv_thread_pool_size -v 16 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_direct_skv_pack_max_size -v 500 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_fast_mode_max_thread_pool_size -v 16 --unstable" ')
+    exec_command(ip,
+                 'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k id_mapping_fast_mode_pack_max_size -v 500 --unstable" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n identity_skv_proxy -k enable_read_async -v true --unstable" ')
     exec_command(ip,
@@ -434,25 +432,37 @@ def open_idm_optimize_trigger_in_SDH_132(ip):
                  'su - sa_cluster -c "aradmin config set server -p edge -m edge -n mem_mb -v 1024 " ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p horizon -n inflow -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
+    adjust_yarn_memory(ip)
+    if get_env_type(ip) == EnvType.SIMPLIFY:
+        # 单机环境需要调整 scheduler 进程的内存大小
+        exec_command(ip,
+                     'su - sa_cluster -c "aradmin config set server -m horizon -p stream_manager -n mem_mb -v 4096" ')
+    restart_module(ip, "edge", "edge")
+    restart_module(ip, "horizon", "identity_skv_proxy")
+    restart_module(ip, "horizon", "stream_manager")
+
+def adjust_yarn_memory(ip):
     if get_env_type(ip) == EnvType.MINI:
-        # 调整 yarn 内存到 26G, mini 集群默认是 23G
+        # 获取当前机器总内存, 64G机器调整yarn内存到 26G, 128G机器调整yarn内存到 60G
+        mem_result = exec_command(ip, 'su - sa_cluster -c "free -m"')
+        lines = mem_result.split('\n')
+        memory_info = lines[1].split()
+        total_memory = int(memory_info[1])
+        if total_memory >= 61440 and total_memory <= 102400:
+            yarn_mem = 26624
+        else:
+            yarn_mem = 61440
+
+        # 调整 yarn 内存
         result = exec_command(ip,
                               'su - sa_cluster -c "mothershipadmin config search -m yarn -k yarn.nodemanager.resource.memory-mb" ')
         pattern = re.compile(r'role_config_group_nodemanager_\d+')
         matches = pattern.search(result)
         if matches:
             role_group = matches.group()
-            cmd = f"mothershipadmin role_config_group config set -m yarn -r nodemanager --role_config_group {role_group} --namespace yarn-site -k yarn.nodemanager.resource.memory-mb -v 26624 --yes"
+            cmd = f"mothershipadmin role_config_group config set -m yarn -r nodemanager --role_config_group {role_group} --namespace yarn-site -k yarn.nodemanager.resource.memory-mb -v {yarn_mem} --yes"
             exec_command(ip, f'su - sa_cluster -c "{cmd}"')
-    else:
-        # 单机环境需要调整 scheduler 进程的内存大小
-        exec_command(ip,
-                     'su - sa_cluster -c "aradmin config set server -m horizon -p stream_manager -n mem_mb -v 4096" ')
-
-    restart_module(ip, "edge", "edge")
-    restart_module(ip, "horizon", "identity_skv_proxy")
-    restart_module(ip, "horizon", "stream_manager")
-
+            exec_command(ip, 'su - sa_cluster -c "mothershipadmin restart -m yarn" ')
 
 def open_idm_optimize_trigger_in_old_env(ip):
     exec_command(ip,
@@ -471,7 +481,7 @@ def open_idm_optimize_trigger_in_old_env(ip):
                  'su - sa_cluster -c "aradmin config set server -p sdf -m id_mapping_skv_proxy -n mem_mb -v 4096" ')
     exec_command(ip,
                  'su - sa_cluster -c "sbpadmin business_config set -p sdf -n extractor -k max_before_deviation_hour_cluster -v 24000 --unstable" ')
-
+    adjust_yarn_memory(ip)
     restart_module(ip, "sdf", "id_mapping_skv_proxy")
     restart_module(ip, "sdf", "extractor")
 
@@ -605,7 +615,7 @@ def extract_ip_from_line(line):
 
 def pause_import_and_wait_consume_latency(ip, env_version):
     print("暂停导入并等待数据延迟被消费完成")
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         pause_module(ip, "edge", "edge")
         start_module(ip, "integrator", "scheduler")
         waiting_sdi_consume_latency(ip, env_version)
@@ -622,7 +632,7 @@ def pause_import_and_wait_consume_latency(ip, env_version):
 
 def start_import_and_pause_handler(ip, env_version):
     print("开启导入并暂停数据处理, 堆积压测数据")
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         pause_module(ip, "integrator", "scheduler")
         start_module(ip, "edge", "edge")
         clear_sdi_scheduler_log_before_sdh132(ip)
@@ -667,7 +677,7 @@ def wait_profile_stream_consume_latency(ip, env_version):
 
 def pause_handler_and_start_edge(ip, env_version):
     print("停止数据处理, 开启 edge, 将数据堆积在 process-chain 上游")
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         pause_module(ip, "integrator", "scheduler")
         clear_sdi_scheduler_log_before_sdh132(ip)
     elif env_version == 'SDH-132':
@@ -684,7 +694,7 @@ def check_edge_latency_and_start_handler(target_ip_list, env_version):
     wait_edge_consume_latency(target_ip_list)
     ip = target_ip_list[0]
     print("开始 process-chain 数据处理")
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         start_module(ip, "integrator", "scheduler")
     elif env_version == 'SDH-132':
         start_module(ip, "horizon", "stream_manager")
@@ -726,7 +736,7 @@ def wait_edge_consume_latency(target_ip_list):
 
 def start_handler(ip, env_version):
     print("开启数据处理, 消费堆积数据")
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         start_module(ip, "integrator", "scheduler")
     elif env_version == 'SDH-132':
         start_module(ip, "horizon", "stream_manager")
@@ -747,7 +757,7 @@ def start_module(ip, product, module):
 
 
 def check_sdi_exists_latency(ip, env_version):
-    if env_version == 'SDH-131':
+    if env_version == 'SDH-131' or env_version == 'SDH-130':
         result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency" ')
     else:
         result = exec_command(ip, 'su - sa_cluster -c "horizonadmin inflow check_latency" ')
@@ -761,7 +771,7 @@ def check_sdi_exists_latency(ip, env_version):
 def waiting_sdi_consume_latency(ip, env_version):
     i = 0
     while True:
-        if env_version == 'SDH-131':
+        if env_version == 'SDH-131' or env_version == 'SDH-130':
             result = exec_command(ip, 'su - sa_cluster -c "integratoradmin check_latency" ')
         else:
             result = exec_command(ip, 'su - sa_cluster -c "horizonadmin inflow check_latency" ')

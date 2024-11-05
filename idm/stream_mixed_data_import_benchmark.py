@@ -42,9 +42,11 @@ def process(args):
         idm_benchmark.open_idm_optimize_trigger(target_ip, target_env_version, skip_init)
         idm_benchmark.create_new_project(target_ip, target_env_version, project, args.id_mode, args.idm_engine_type,
                                          skip_init)
+        if target_env_version == 'SDH-131':
+            exec_command(target_ip, "sbpadmin business_config set -p integrator -n scheduler -k enable_channel -v false")
+        elif target_env_version != 'old-env':
+            exec_command(target_ip, "sbpadmin business_config set -p horizon -n inflow -k enable_channel -v false")
         exec_command(target_ip, "skvadmin balance start -m skv_offline")
-        exec_command_and_check(target_ip,
-                               "sbpadmin business_config set -p integrator -n scheduler -k max_before_deviation_hour_cluster -v 24000 --unstable")
         # 3. 导入数据
         common_tools.pause_import_and_wait_consume_latency(target_ip, target_env_version)
         common_tools.start_import_and_pause_handler(target_ip, target_env_version)
@@ -54,10 +56,10 @@ def process(args):
         total_cost = end_time - start_time
         # 4. 收集结果
         common_tools.start_handler(target_ip, target_env_version)
-        if target_env_version == 'new':
-            qps = common_tools.collect_sdi_qps(target_ip, total_count)
-        else:
+        if target_env_version == 'old-env':
             qps = common_tools.collect_extractor_qps(target_ip, total_count)
+        else:
+            qps = common_tools.collect_sdi_qps(target_ip, total_count)
         result = build_result(args, target_ip_list, target_env_version, total_count, total_cost, qps)
     except Exception as e:
         print(str(e))
